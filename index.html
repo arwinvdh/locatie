@@ -39,6 +39,7 @@ h1 { margin: 0; font-size: 1.125rem; font-weight: 600; }
 .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand-green); flex: none; }
 .brand h1 { color: #fff; letter-spacing: .01em; }
 .wrap { padding-top: 1.1rem; }
+.card h2 { min-height: 32px; margin: 0; display: flex; align-items: center; }
 h2 { margin: 0 0 .5rem; font-size: .8125rem; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
 .grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 48rem) { .grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; } .sticky { position: sticky; top: 1rem; } }
@@ -192,7 +193,6 @@ textarea.inp { resize: vertical; min-height: 64px; }
           <label class="check"><input type="checkbox" id="optLabels"> Straatnamen</label>
           <label class="check"><input type="checkbox" id="optParcel"> Perceelgrenzen</label>
           <label class="check"><input type="checkbox" id="optMini"> Regiokaart</label>
-          <label class="check"><input type="checkbox" id="optDate"> Datum</label>
         </div>
         <button class="btn" id="saveP">Opslaan als project</button>
       </div>
@@ -228,7 +228,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function lsGet(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
-  var OPT_DEF = { labels: 1, parcel: 0, mini: 1, date: 1 };
+  var OPT_DEF = { labels: 1, parcel: 0, mini: 1 };
   var state = { layer: 'sat', failed: {}, opts: loadOpts(), lat: null, lon: null, range: +lsGet(LS.range, 400) };
   var map, marker;
   function loadOpts() { var o = {}; Object.keys(OPT_DEF).forEach(function (k) { o[k] = lsGet('locdelen.opt.' + k, String(OPT_DEF[k])) === '1'; }); return o; }
@@ -589,7 +589,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       }
       // regiokaart linksboven, noordpijl rechtsboven
       if (region) { drawRegion(g, region, 60, 60); [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); }
-      var nx = W - 84, ny = 84;
+      var nx = W - 100, ny = 100;
       g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.arc(nx, ny, 40, 0, 7); g.fill();
       g.fillStyle = '#111'; g.beginPath(); g.moveTo(nx, ny - 26); g.lineTo(nx + 11, ny + 8); g.lineTo(nx, ny + 2); g.lineTo(nx - 11, ny + 8); g.closePath(); g.fill();
       g.font = '700 20px Avenir Next, Avenir, system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('N', nx, ny + 30);
@@ -598,19 +598,20 @@ textarea.inp { resize: vertical; min-height: 64px; }
       var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? phoneFmt($('myPhone').value) : '';
       g.fillStyle = 'rgba(0,31,56,.96)'; g.fillRect(0, H - BH, W, BH);
       g.fillStyle = '#76b720'; g.fillRect(0, H - BH, 10, BH);
-      var rt = [], by = H - BH + 46;
-      if (o.date) rt.push({ t: 'Status ' + new Date().toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }), f: '24px Avenir Next, Avenir, system-ui, sans-serif', c: 'rgba(255,255,255,.65)', dy: 0 });
-      if (who) { rt.push({ t: 'UITVOERDER', f: '600 17px Avenir Next, Avenir, system-ui, sans-serif', c: '#8fd000', dy: 58 }); rt.push({ t: who, f: '600 32px Avenir Next, Avenir, system-ui, sans-serif', c: '#fff', dy: 38 }); }
-      if (tel) rt.push({ t: tel, f: '32px Avenir Next, Avenir, system-ui, sans-serif', c: '#fff', dy: who ? 42 : 60 });
+      // vaste rasterlijnen (baselines) zodat links en rechts exact op elkaar aansluiten
+      var T = H - BH, PAD = 36, r1 = T + 52, r2 = T + 112, r3 = T + 162, r4 = T + 200;
+      var rt = [];
+      if (who) rt.push({ t: 'UITVOERDER', f: '600 17px Avenir Next, Avenir, system-ui, sans-serif', c: '#8fd000', y: r1 }, { t: who, f: '600 32px Avenir Next, Avenir, system-ui, sans-serif', c: '#fff', y: r2 });
+      if (tel) rt.push({ t: tel, f: '32px Avenir Next, Avenir, system-ui, sans-serif', c: '#fff', y: who ? r3 : r2 });
       var rw = 0; rt.forEach(function (r) { g.font = r.f; rw = Math.max(rw, g.measureText(r.t).width); });
-      g.textAlign = 'left'; g.textBaseline = 'alphabetic'; var cx = W - 30 - rw;
-      rt.forEach(function (r) { by += r.dy; g.font = r.f; g.fillStyle = r.c; g.fillText(r.t, cx, by); });
-      var lw = rt.length ? W - 36 - rw - 50 : W - 60;
-      g.textAlign = 'left'; var ty = H - BH + 52;
-      if (nr) { g.font = '600 30px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = '#8fd000'; g.fillText(clip(g, nr, lw), 36, ty); ty += 58; } else ty += 12;
-      g.font = '700 56px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = '#fff'; if (nm || !nr) { g.fillText(clip(g, nm || 'Locatie', lw), 36, ty); ty += 50; }
+      g.textAlign = 'left'; g.textBaseline = 'alphabetic'; var cx = W - PAD - rw;
+      rt.forEach(function (r) { g.font = r.f; g.fillStyle = r.c; g.fillText(r.t, cx, r.y); });
+      var lw = rt.length ? cx - PAD - 40 : W - 2 * PAD;
+      if (nr) { g.font = '600 30px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = '#8fd000'; g.fillText(clip(g, nr, lw), PAD, r1); }
+      g.font = '700 56px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = '#fff'; if (nm || !nr) g.fillText(clip(g, nm || 'Locatie', lw), PAD, r2);
       g.font = '30px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.88)';
-      (addr ? addrLines(addr).reduce(function (acc, l) { return acc.concat(wrap(g, l, lw, 1)); }, []) : [fmt(lat) + ', ' + fmt(lon)]).forEach(function (ln) { g.fillText(ln, 36, ty); ty += 38; });
+      var ay = [r3, r4];
+      (addr ? addrLines(addr).reduce(function (acc, l) { return acc.concat(wrap(g, l, lw, 1)); }, []) : [fmt(lat) + ', ' + fmt(lon)]).slice(0, 2).forEach(function (ln, k) { g.fillText(ln, PAD, ay[k]); });
       g.font = '14px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.5)'; g.textAlign = 'right';
       g.fillText(credits.join(' \u00B7 '), W - 14, H - 8);
       // witte rand met schaduw. Gemeten in een iOS-screenshot: WhatsApp zet ~6,9% van de breedte als buitenradius en snijdt ~2,4% per zijde af,

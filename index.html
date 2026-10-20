@@ -722,8 +722,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
       // onderbalk
       var BH = 250, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();
       var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? phoneFmt($('myPhone').value) : '';
-      var sh = g.createLinearGradient(0, H - BH - 36, 0, H - BH); sh.addColorStop(0, 'rgba(0,31,56,0)'); sh.addColorStop(1, 'rgba(0,31,56,.38)');
-      g.fillStyle = sh; g.fillRect(0, H - BH - 36, W, 36);
+      var sh = g.createLinearGradient(0, H - BH - 18, 0, H - BH); sh.addColorStop(0, 'rgba(0,31,56,0)'); sh.addColorStop(1, 'rgba(0,31,56,.16)');
+      g.fillStyle = sh; g.fillRect(0, H - BH - 18, W, 18);
       g.fillStyle = 'rgba(0,31,56,.96)'; g.fillRect(0, H - BH, W, BH);
       g.fillStyle = '#76b720'; g.fillRect(0, H - BH, W, 8);
       // vaste rasterlijnen (baselines) zodat links en rechts exact op elkaar aansluiten

@@ -404,11 +404,15 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function focusName() { if (!$('name').value.trim() && !$('nr').value.trim()) $('nr').focus({ preventScroll: true }); }
 
   /* ---------- bericht ---------- */
+  function phoneFmt(t) {
+    var d = String(t).replace(/[^\d]/g, '');
+    return /^06\d{8}$/.test(d) ? '06-' + d.slice(2) : String(t).trim();
+  }
   function label() { return [$('nr').value.trim(), $('name').value.trim()].filter(Boolean).join(' \u00B7 '); }
   function message() {
     if (state.lat == null) return '';
     var title = label(), addr = $('addr').value.trim(), note = $('note').value.trim(), out = [];
-    var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? $('myPhone').value.trim() : '';
+    var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? phoneFmt($('myPhone').value) : '';
     if (title) out.push('\uD83C\uDFD7\uFE0F *' + title + '*');
     if (addr) out.push('\uD83D\uDCCD ' + addr);
     if (note) out.push('\u2139\uFE0F ' + note);
@@ -536,7 +540,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
 
   function buildImage() {
-    var W = 1080, H = 1440, lat = state.lat, lon = state.lon, o = state.opts;
+    var W = 1080, H = 1360, lat = state.lat, lon = state.lon, o = state.opts;
     var mpp = state.range / W;
     var c = { W: W, H: H, lat: lat, lon: lon, zf: Math.log(156543.03392 * Math.cos(lat * Math.PI / 180) / mpp) / Math.LN2 };
     var bk = baseKey();
@@ -568,7 +572,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.font = '700 20px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('N', nx, ny + 30);
       // onderbalk
       var BH = 250, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();
-      var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? $('myPhone').value.trim() : '';
+      var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? phoneFmt($('myPhone').value) : '';
       g.fillStyle = 'rgba(0,31,56,.96)'; g.fillRect(0, H - BH, W, BH);
       g.fillStyle = '#76b720'; g.fillRect(0, H - BH, 10, BH);
       var rt = [], by = H - BH + 46;

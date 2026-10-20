@@ -40,6 +40,9 @@ h1 { margin: 0; font-size: 1.125rem; font-weight: 600; }
 .brand h1 { color: #fff; letter-spacing: .01em; }
 .gear { margin-left: auto; width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #fff; cursor: pointer; transition: background-color .15s; }
 .gear:hover { background: rgba(255,255,255,.14); }
+.tip { display: flex; gap: .75rem; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding: .6rem .75rem; border: 1px solid var(--brand-green); border-radius: 12px; background: color-mix(in srgb, var(--brand-green) 12%, var(--surface)); font-size: .875rem; }
+.warnlink { border: 0; background: none; padding: 0; text-align: left; color: var(--warn); font: inherit; font-size: .8125rem; text-decoration: underline; cursor: pointer; }
+.addr-note { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: -.2rem; }
 .more-sum { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--accent); font-size: .875rem; font-weight: 600; }
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
@@ -146,6 +149,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 
 <!-- Maker-weergave -->
 <section id="editor">
+  <div class="tip" id="tip" hidden><span>Tip: tik op Deel en kies <b>Zet op beginscherm</b>. Alleen via dat icoon blijven je projecten en gegevens betrouwbaar bewaard.</span><button class="btn sm" id="tipX">Ok</button></div>
   <div class="grid">
     <div style="display:grid;gap:1rem">
       <div class="card">
@@ -172,6 +176,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
           <div class="field grow"><label for="name">Projectnaam</label><input class="inp" id="name" list="dl-name" placeholder="Bijv. Nieuwbouw Zuidpoort" autocomplete="off"></div>
         </div>
         <div class="field"><label for="addr">Adres</label><input class="inp" id="addr" autocomplete="off"></div>
+        <p class="hint addr-note" id="addrNote" hidden><span id="addrNoteTxt"></span> <button class="btn sm" id="addrNoteBtn" hidden>Bijwerken</button></p>
         <details id="more"><summary class="more-sum">Meer opties</summary>
           <div class="more-in">
             <div class="field"><label for="plabel">Wat is deze pin?</label>
@@ -189,9 +194,10 @@ textarea.inp { resize: vertical; min-height: 64px; }
       <div class="card">
         <h2>3 &middot; Versturen</h2>
         <div class="row" style="gap:1rem">
-          <label class="check"><input type="checkbox" id="useWho"> Uitvoerder</label>
-          <label class="check"><input type="checkbox" id="usePhone"> Telefoonnummer</label>
+          <label class="check"><input type="checkbox" id="useWho"> Mijn naam</label>
+          <label class="check"><input type="checkbox" id="usePhone"> Mijn telefoonnummer</label>
         </div>
+        <button class="warnlink" id="whoWarn" hidden></button>
         <div class="wa"><div class="wa-b" id="preview"></div></div>
         <details id="imgopts"><summary class="more-sum">Afbeelding aanpassen</summary>
           <div class="more-in">
@@ -216,6 +222,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
           <input type="file" id="impf" accept="application/json" hidden>
         </div>
         <p class="hint">Projecten staan alleen op dit apparaat. Exporteer om ze op een ander apparaat te zetten.</p>
+        <p class="hint err" id="backupHint" hidden>Je hebt al een tijdje geen back-up gemaakt. Tik op Exporteer.</p>
       </div>
     </div>
   </div>
@@ -229,6 +236,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   <dialog id="settings">
     <h2>Mijn gegevens</h2>
     <div class="field"><label for="myName">Naam uitvoerder</label><input class="inp" id="myName" autocomplete="name"></div>
+    <div class="field"><label for="myRole">Functie</label><input class="inp" id="myRole" placeholder="Uitvoerder" autocomplete="off"></div>
     <div class="field"><label for="myPhone">Telefoon</label><input class="inp" id="myPhone" type="tel" autocomplete="tel"></div>
     <p class="hint">Eenmalig invullen. Blijft alleen op dit apparaat staan.</p>
     <button class="btn primary" id="settingsOk">Klaar</button>
@@ -247,7 +255,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
   var OPT_DEF = { labels: 1, parcel: 0, mini: 1 };
-  var state = { layer: 'sat', failed: {}, opts: loadOpts(), lat: null, lon: null, range: +lsGet(LS.range, 400) };
+  var state = { addrAuto: true, layer: 'sat', failed: {}, opts: loadOpts(), lat: null, lon: null, range: +lsGet(LS.range, 400) };
   var map, marker;
   function loadOpts() { var o = {}; Object.keys(OPT_DEF).forEach(function (k) { o[k] = lsGet('locdelen.opt.' + k, String(OPT_DEF[k])) === '1'; }); return o; }
 
@@ -333,16 +341,18 @@ textarea.inp { resize: vertical; min-height: 64px; }
     placePin(lat, lon, true, !o.keepView);
     $('coords').textContent = fmt(lat) + ', ' + fmt(lon);
     $('results').innerHTML = '';
-    if (o.addr) $('addr').value = o.addr;
+    if (o.addr) setAddr(o.addr, !!o.autoAddr);
     else if (o.reverse) reverse(lat, lon);
     update();
   }
 
   function parseCoords(s) {
     var m;
-    m = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) ||
+    // volgorde telt: eerst de pin zelf (!3d!4d, q=, ll=), pas daarna het kaartmidden (@), dat kan ver van de pin liggen
+    m = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) ||
         s.match(/[?&](?:q|ll|query|center|destination|daddr)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i) ||
-        s.match(/^\s*(-?\d{1,3}\.\d+)\s*[,; ]\s*(-?\d{1,3}\.\d+)\s*$/);
+        s.match(/^\s*(-?\d{1,3}\.\d+)\s*[,; ]\s*(-?\d{1,3}\.\d+)\s*$/) ||
+        s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
     if (m && validLL(+m[1], +m[2])) return [+m[1], +m[2]];
     // graden/minuten/seconden: 52°05'26.5"N 5°07'17.1"E
     var d = s.match(/(\d+)°\s*(\d+)['′]\s*([\d.]+)["″]?\s*([NZSn])[\s,]+(\d+)°\s*(\d+)['′]\s*([\d.]+)["″]?\s*([EOWeo])/i);
@@ -377,7 +387,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 
   function geocode(q) {
     setStatus('Zoeken...');
-    return timeoutFetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=0&limit=5&accept-language=nl&q=' + encodeURIComponent(q), 8000)
+    return timeoutFetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&accept-language=nl&q=' + encodeURIComponent(q), 8000)
       .then(function (r) { return r.json(); })
       .then(function (list) {
         if (!list.length) { setStatus('Niets gevonden. Probeer een ander adres of tik op de kaart.', 'err'); return; }
@@ -392,30 +402,62 @@ textarea.inp { resize: vertical; min-height: 64px; }
       .catch(function () { setStatus('Zoeken mislukt. Tik op de kaart of plak coördinaten.', 'err'); });
   }
   function pick(it) {
-    setPoint(+it.lat, +it.lon, { addr: shortAddr(it.display_name) });
+    setPoint(+it.lat, +it.lon, { addr: fmtAddr(it.address) || shortAddr(it.display_name), autoAddr: true });
     setStatus('Locatie gezet. Sleep de pin om te verfijnen.', 'ok'); focusName();
+  }
+  function fmtAddr(a) {
+    if (!a || !a.road) return '';
+    return a.road + (a.house_number ? ' ' + a.house_number : '') + ', ' + [a.postcode, a.city || a.town || a.village || a.municipality].filter(Boolean).join(' ');
   }
   function shortAddr(s) { return s.split(',').slice(0, 4).join(',').trim(); }
 
+  // adres dat de tool zelf invulde mag de tool later bijwerken; wat jij typte niet zonder te vragen
+  function setAddr(v, auto) { $('addr').value = v; state.addrAuto = auto; hideAddrNote(); }
+  function hideAddrNote() { $('addrNote').hidden = true; }
+  function showAddrNote(txt, btn) {
+    $('addrNoteTxt').textContent = txt; $('addrNoteBtn').hidden = !btn; $('addrNote').hidden = false;
+    $('addrNoteBtn').onclick = btn ? function () { setAddr(btn, true); update(); } : null;
+  }
   function reverse(lat, lon) {
+    var tok = state.revTok = (state.revTok || 0) + 1;
     timeoutFetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=nl&lat=' + lat + '&lon=' + lon, 8000)
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        if (!j || !j.display_name) return;
-        var a = j.address || {}, line = '';
-        if (a.road) line = a.road + (a.house_number ? ' ' + a.house_number : '') + ', ' + [a.postcode, a.city || a.town || a.village || a.municipality].filter(Boolean).join(' ');
-        $('addr').value = line || shortAddr(j.display_name);
+        if (tok !== state.revTok || !j || !j.display_name) return;
+        var a = j.address || {}, line = fmtAddr(a);
+        var txt = line || shortAddr(j.display_name), cur = $('addr').value.trim();
+        if (!cur || state.addrAuto) {
+          setAddr(txt, true);
+          if (!a.house_number) showAddrNote('Bij benadering: er is geen huisnummer gevonden op deze plek. Controleer het adres of pas het aan.');
+        } else if (txt !== cur) {
+          showAddrNote('Je pin staat nu bij: ' + txt, txt);
+        }
         update();
       }).catch(function () {});
   }
 
   function busy(on) { $('go').classList.toggle('busy', on); }
+  // links met alleen een plaatsnaam (google.com/maps/place/Straat+1,+Plaats/, maps.apple.com/?address=...)
+  function placeFromUrl(q) {
+    var u; try { u = new URL(q); } catch (e) { return ''; }
+    var t = '';
+    if (/(^|\.)google\.[a-z.]+$/i.test(u.hostname)) {
+      var m = u.pathname.match(/\/maps\/(?:place|search)\/([^\/@]+)/);
+      if (m) t = m[1]; else t = u.searchParams.get('q') || u.searchParams.get('query') || '';
+    } else if (/(^|\.)apple\.com$/i.test(u.hostname)) {
+      t = u.searchParams.get('address') || u.searchParams.get('q') || '';
+    }
+    try { t = decodeURIComponent(String(t).replace(/\+/g, ' ')); } catch (e) { t = String(t).replace(/\+/g, ' '); }
+    return t.trim().length > 2 ? t.trim() : '';
+  }
   function lookup() {
     var q = $('q').value.trim();
     if (!q) return;
     var c = parseCoords(q);
     if (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Coördinaten herkend. Sleep de pin om te verfijnen.', 'ok'); focusName(); return; }
     if (/^https?:\/\//i.test(q)) {
+      var pt = placeFromUrl(q);
+      if (pt) { setStatus('Adres uit de link opzoeken...'); busy(true); geocode(pt).then(function () { busy(false); }); return; }
       setStatus('Korte link uitzoeken...');
       busy(true);
       resolveShort(q).then(function (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Link herkend.', 'ok'); focusName(); })
@@ -444,6 +486,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
   var FIELDS = ['nr', 'name', 'addr', 'note', 'via', 'arrive', 'plabel'];
   function openMore() { if (['note', 'via', 'arrive', 'plabel'].some(function (f) { return $(f).value; })) $('more').open = true; }
+  function role() { return $('myRole').value.trim() || 'Uitvoerder'; }
   function label() { return [$('nr').value.trim(), $('name').value.trim()].filter(Boolean).join(' \u00B7 '); }
   function addrLines(a) {
     var i = a.indexOf(',');
@@ -462,7 +505,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     if (note) out.push('\u2139\uFE0F ' + note);
     if (who || tel) {
       out.push('');
-      if (who) out.push('\uD83D\uDC77 ' + who + ' (uitvoerder)');
+      if (who) out.push('\uD83D\uDC77 ' + who + ' (' + role().toLowerCase() + ')');
       if (tel) out.push('\uD83D\uDCDE ' + tel);
     }
     out.push('');
@@ -478,6 +521,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
     var m = message(), has = state.lat != null;
     $('preview').innerHTML = has ? esc(m).replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\*([^*\n]+)\*/g, '<b>$1</b>') : '<span class="hint">Het bericht verschijnt hier zodra je een locatie hebt.</span>';
     ['copy', 'wa', 'img'].forEach(function (id) { $(id).disabled = !has; });
+    var miss = []; if ($('useWho').checked && !$('myName').value.trim()) miss.push('naam'); if ($('usePhone').checked && !$('myPhone').value.trim()) miss.push('telefoonnummer');
+    $('whoWarn').hidden = !miss.length; $('whoWarn').textContent = miss.length ? 'Je ' + miss.join(' en ') + ' ontbreekt in het bericht. Tik om in te vullen.' : '';
   }
 
   function copyText(t) {
@@ -630,7 +675,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       // vaste rasterlijnen (baselines) zodat links en rechts exact op elkaar aansluiten
       var T = H - BH, PAD = 36, r1 = T + 52, r2 = T + 112, r3 = T + 162, r4 = T + 200;
       var rt = [];
-      if (who) rt.push({ t: 'UITVOERDER', f: '600 17px Avenir Next, Avenir, system-ui, sans-serif', c: '#8fd000', y: r1 }, { t: who, f: '600 32px Avenir Next, Avenir, system-ui, sans-serif', c: '#fff', y: r2 });
+      if (who) rt.push({ t: role().toUpperCase(), f: '600 17px Avenir Next, Avenir, system-ui, sans-serif', c: '#8fd000', y: r1 }, { t: who, f: '600 32px Avenir Next, Avenir, system-ui, sans-serif', c: '#fff', y: r2 });
       if (tel) rt.push({ t: tel, f: '32px Avenir Next, Avenir, system-ui, sans-serif', c: '#fff', y: who ? r3 : r2 });
       var rw = 0; rt.forEach(function (r) { g.font = r.f; rw = Math.max(rw, g.measureText(r.t).width); });
       g.textAlign = 'left'; g.textBaseline = 'alphabetic'; var cx = W - PAD - rw;
@@ -713,6 +758,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       var c = document.createElement('button'); c.className = 'chip'; c.textContent = pl(p); c.onclick = function () { loadProject(p); }; chips.appendChild(c);
     });
     chips.hidden = !all.length;
+    $('backupHint').hidden = !(all.length >= 3 && Date.now() - (+lsGet('locdelen.lastExport', '0') || 0) > 60 * 864e5);
     $('dl-nr').innerHTML = ''; $('dl-name').innerHTML = '';
     all.forEach(function (p) {
       if (p.nr) { var o = document.createElement('option'); o.value = p.nr; o.label = p.name || ''; $('dl-nr').appendChild(o); }
@@ -731,7 +777,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
   function resetAll() {
     state.lat = state.lon = null;
-    ['q'].concat(FIELDS).forEach(function (id) { $(id).value = ''; });
+    ['q'].concat(FIELDS).forEach(function (id) { $(id).value = ''; }); state.addrAuto = true; hideAddrNote();
     if (marker) { map.removeLayer(marker); marker = null; }
     $('coords').textContent = ''; $('results').innerHTML = '';
     setStatus('Plak een Google Maps-link, coördinaten (52.0907, 5.1214) of typ een adres. Of tik op de kaart.');
@@ -782,6 +828,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       function () { setStatus('Geen toegang tot je locatie.', 'err'); }, { enableHighAccuracy: true, timeout: 10000 });
   };
   FIELDS.forEach(function (id) { $(id).addEventListener('input', update); $(id).addEventListener('change', update); });
+  $('addr').addEventListener('input', function () { state.addrAuto = false; hideAddrNote(); });
   // kiest iemand een bewaard project uit de suggesties, dan vullen we de rest in
   function suggestPick(field) {
     return function () {
@@ -798,6 +845,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   $('name').addEventListener('change', suggestPick('name'));
   // instellingen
   $('gear').onclick = function () { openSettings(); };
+  $('whoWarn').onclick = function () { openSettings($('myName').value.trim() ? 'myPhone' : 'myName'); };
   $('settingsOk').onclick = function () { $('settings').close(); };
   $('settings').addEventListener('click', function (e) { if (e.target === this) this.close(); });
   // sneltoetsen
@@ -806,7 +854,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!$('img').disabled) shareImage(); }
     else if (e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); if (!$('copy').disabled) $('copy').click(); }
   });
-  [['myName', 'locdelen.who'], ['myPhone', 'locdelen.phone']].forEach(function (x) {
+  [['myName', 'locdelen.who'], ['myPhone', 'locdelen.phone'], ['myRole', 'locdelen.role']].forEach(function (x) {
     $(x[0]).value = lsGet(x[1], ''); $(x[0]).addEventListener('input', function () { lsSet(x[1], this.value.trim()); update(); });
   });
   [['useWho', 'locdelen.useWho', 'myName'], ['usePhone', 'locdelen.usePhone', 'myPhone']].forEach(function (x) {
@@ -832,6 +880,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   };
   $('filter').oninput = renderP;
   $('exp').onclick = function () {
+    lsSet('locdelen.lastExport', String(Date.now())); $('backupHint').hidden = true;
     var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(getP(), null, 2)], { type: 'application/json' }));
     a.download = 'locaties.json'; a.click();
   };
@@ -860,6 +909,10 @@ textarea.inp { resize: vertical; min-height: 64px; }
       setStatus('Vorige locatie hersteld. Tik op Nieuw voor een lege start.');
     } else $('q').focus();
   } catch (e) {}
+  var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  if (ios && !standalone && lsGet('locdelen.tipX', '0') !== '1') $('tip').hidden = false;
+  $('tipX').onclick = function () { lsSet('locdelen.tipX', '1'); $('tip').hidden = true; };
   renderP(); update();
 })();
 </script>

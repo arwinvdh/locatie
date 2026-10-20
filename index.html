@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Locatie delen</title>
-<meta name="theme-color" content="#1F3A5F">
+<meta name="theme-color" content="#001f38">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Locatie">
@@ -15,15 +15,15 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 :root {
-  --bg: #F3F4F6; --surface: #FFFFFF; --field: #FFFFFF; --ink: #1F2933; --ink-2: #616E7C;
-  --line: #D2D6DC; --accent: #1F5FBF; --on-accent: #FFFFFF; --warn: #B42318; --ok: #1B7442;
+  --bg: #EEF3F8; --surface: #FFFFFF; --field: #FFFFFF; --ink: #0E2236; --ink-2: #566879;
+  --line: #D0DAE5; --accent: #014983; --on-accent: #FFFFFF; --warn: #B42318; --ok: #3F7D0A; --brand-dark: #001f38; --brand-green: #76b720;
   --wa-wall: #EAE3D8; --wa-bubble: #D9FDD3; --wa-text: #111B21; --wa-link: #027EB5;
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #111418; --surface: #1A1F25; --field: #12161B; --ink: #E6E9ED; --ink-2: #9AA5B1;
-    --line: #2E3640; --accent: #5B9DFF; --on-accent: #0B1B33; --warn: #FF8A7A; --ok: #5FD08A;
+    --bg: #0A1520; --surface: #112030; --field: #0C1824; --ink: #E6ECF2; --ink-2: #93A5B7;
+    --line: #24384A; --accent: #5AA6E6; --on-accent: #001f38; --warn: #FF8A7A; --ok: #8fd000;
     --wa-wall: #0B141A; --wa-bubble: #005C4B; --wa-text: #E9EDEF; --wa-link: #53BDEB; color-scheme: dark;
   }
 }
@@ -33,7 +33,12 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .wrap { max-width: 64rem; margin-inline: auto; padding: 1rem max(16px, env(safe-area-inset-right)) 6rem max(16px, env(safe-area-inset-left)); }
 button, input, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-h1 { margin: 0 0 .75rem; font-size: 1.125rem; font-weight: 600; }
+h1 { margin: 0; font-size: 1.125rem; font-weight: 600; }
+.brand { background: var(--brand-dark); color: #fff; border-bottom: 3px solid var(--brand-green); padding: calc(.75rem + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) .75rem max(16px, env(safe-area-inset-left)); }
+.brand .in { max-width: 64rem; margin-inline: auto; display: flex; align-items: center; gap: .6rem; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand-green); flex: none; }
+.brand h1 { color: #fff; letter-spacing: .01em; }
+.wrap { padding-top: 1.1rem; }
 h2 { margin: 0 0 .5rem; font-size: .8125rem; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
 .grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 48rem) { .grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; } .sticky { position: sticky; top: 1rem; } }
@@ -107,6 +112,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 </style>
 </head>
 <body>
+<header class="brand"><div class="in"><span class="dot"></span><h1>Locatie delen</h1></div></header>
 <div class="wrap" id="app">
 
 <!-- Ontvanger-weergave -->
@@ -126,7 +132,6 @@ textarea.inp { resize: vertical; min-height: 64px; }
 
 <!-- Maker-weergave -->
 <section id="editor">
-  <h1>Locatie delen</h1>
   <div class="grid">
     <div style="display:grid;gap:1rem">
       <div class="card">
@@ -429,10 +434,10 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.font = '700 20px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('N', nx, ny + 30);
       // onderbalk
       var BH = 170, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();
-      g.fillStyle = 'rgba(16,32,56,.94)'; g.fillRect(0, H - BH, W, BH);
-      g.fillStyle = '#E5322D'; g.fillRect(0, H - BH, 10, BH);
+      g.fillStyle = 'rgba(0,31,56,.95)'; g.fillRect(0, H - BH, W, BH);
+      g.fillStyle = '#76b720'; g.fillRect(0, H - BH, 10, BH);
       g.textAlign = 'left'; g.textBaseline = 'alphabetic'; var ty = H - BH + 44;
-      if (nr) { g.font = '600 26px system-ui, sans-serif'; g.fillStyle = '#9CC2FF'; g.fillText(clip(g, nr, W - 80), 36, ty); ty += 50; } else ty += 14;
+      if (nr) { g.font = '600 26px system-ui, sans-serif'; g.fillStyle = '#8fd000'; g.fillText(clip(g, nr, W - 80), 36, ty); ty += 50; } else ty += 14;
       g.font = '700 46px system-ui, sans-serif'; g.fillStyle = '#fff'; g.fillText(clip(g, nm || (nr ? '' : 'Locatie'), W - 80), 36, ty);
       g.font = '28px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.85)';
       g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), W - 80), 36, H - 28);

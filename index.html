@@ -585,8 +585,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
       wrap(g, addr || (fmt(lat) + ', ' + fmt(lon)), lw, 2).forEach(function (ln) { g.fillText(ln, 36, ty); ty += 38; });
       g.font = '14px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.5)'; g.textAlign = 'right';
       g.fillText(credits.join(' \u00B7 '), W - 14, H - 8);
-      // witte rand met schaduw rond de kaart
-      var M = 44, R = 20, out = document.createElement('canvas'); out.width = W + 2 * M; out.height = H + 2 * M;
+      // witte rand met schaduw; binnenradius concentrisch met de afronding die WhatsApp (iOS) zelf op de buitenhoeken zet (~5% van de breedte)
+      var M = 44, WA_R = Math.round((W + 2 * M) * 0.05), R = Math.max(8, WA_R - M), out = document.createElement('canvas'); out.width = W + 2 * M; out.height = H + 2 * M;
       var o2 = out.getContext('2d');
       o2.fillStyle = '#fff'; o2.fillRect(0, 0, out.width, out.height);
       o2.save(); o2.shadowColor = 'rgba(0,31,56,.32)'; o2.shadowBlur = 30; o2.shadowOffsetY = 10; o2.fillStyle = '#fff';

@@ -43,6 +43,8 @@ h1 { margin: 0; font-size: 1.125rem; font-weight: 600; }
 .tip { display: flex; gap: .75rem; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding: .6rem .75rem; border: 1px solid var(--brand-green); border-radius: 12px; background: color-mix(in srgb, var(--brand-green) 12%, var(--surface)); font-size: .875rem; }
 .warnlink { border: 0; background: none; padding: 0; text-align: left; color: var(--warn); font: inherit; font-size: .8125rem; text-decoration: underline; cursor: pointer; }
 .addr-note { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: -.2rem; }
+.map-hint { position: absolute; inset: 0; z-index: 800; display: grid; place-items: center; padding: 1rem; text-align: center; background: rgba(0,31,56,.55); color: #fff; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.map-hint.on { opacity: 1; }
 .more-sum { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--accent); font-size: .875rem; font-weight: 600; }
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
@@ -199,8 +201,10 @@ textarea.inp { resize: vertical; min-height: 64px; }
         </div>
         <button class="warnlink" id="whoWarn" hidden></button>
         <div class="wa"><div class="wa-b" id="preview"></div></div>
-        <details id="imgopts"><summary class="more-sum">Afbeelding aanpassen</summary>
+        <details id="imgopts"><summary class="more-sum">Meer instellingen</summary>
           <div class="more-in">
+            <div class="row"><div class="seg" id="linkmode"><button data-k="pin" aria-pressed="true">Locatie</button><button data-k="route" aria-pressed="false">Route</button></div>
+              <span class="hint" style="align-self:center">link in bericht</span></div>
             <div class="row"><div class="seg" id="range"><button data-r="150" aria-pressed="false">Dichtbij</button><button data-r="400" aria-pressed="true">Midden</button><button data-r="1200" aria-pressed="false">Ruim</button></div>
               <span class="hint" style="align-self:center">bereik</span></div>
             <div class="opts">
@@ -265,6 +269,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function fmt(n) { return (+n).toFixed(6).replace(/0+$/, '').replace(/\.$/, ''); }
   function validLL(a, b) { return isFinite(a) && isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180; }
   function googleUrl(lat, lon) { return 'https://www.google.com/maps?q=' + fmt(lat) + ',' + fmt(lon); }
+  function routeUrl(lat, lon) { return 'https://www.google.com/maps/dir/?api=1&destination=' + fmt(lat) + ',' + fmt(lon); }
+  function linkRoute() { return lsGet('locdelen.link', 'pin') === 'route'; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   /* ---------- kaart ---------- */
@@ -310,8 +316,18 @@ textarea.inp { resize: vertical; min-height: 64px; }
     if (seg) [].forEach.call(seg.children, function (b) { b.setAttribute('aria-pressed', b.dataset.l === state.layer ? 'true' : 'false'); });
   }
   function initMap(el, interactive) {
-    map = L.map(el, { zoomControl: true, dragging: true, scrollWheelZoom: interactive, tap: false }).setView([52.1, 5.3], 7);
+    var coop = L.Browser.mobile && !interactive;    // op telefoon: twee vingers voor de kaart, één vinger blijft scrollen
+    map = L.map(el, { zoomControl: true, dragging: !coop, scrollWheelZoom: interactive, tap: false }).setView([52.1, 5.3], 7);
     map.attributionControl.setPrefix(false);
+    if (coop) {
+      var hint = document.createElement('div'); hint.className = 'map-hint'; hint.textContent = 'Gebruik twee vingers om de kaart te verplaatsen'; el.appendChild(hint);
+      var sx = 0, sy = 0, t = 0;
+      el.addEventListener('touchstart', function (e) { if (e.touches.length === 1) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; } });
+      el.addEventListener('touchmove', function (e) {
+        if (e.touches.length !== 1) return;
+        if (Math.abs(e.touches[0].clientX - sx) + Math.abs(e.touches[0].clientY - sy) > 14) { hint.classList.add('on'); clearTimeout(t); t = setTimeout(function () { hint.classList.remove('on'); }, 1600); }
+      }, { passive: true });
+    }
     return map;
   }
   function setLayer(l) {
@@ -371,7 +387,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 
   function resolveShort(url) {
     // Best effort via publieke CORS-proxy; kan falen. Zoekt coördinaten in de HTML van de doelpagina.
-    var proxies = ['https://corsproxy.io/?url=' + encodeURIComponent(url), 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url)];
+    var proxies = ['https://corsproxy.io/?url=' + encodeURIComponent(url), 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url), 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)];
     return proxies.reduce(function (p, px) {
       return p.catch(function () {
         return timeoutFetch(px, 7000).then(function (r) { return r.text(); }).then(function (t) {
@@ -385,25 +401,47 @@ textarea.inp { resize: vertical; min-height: 64px; }
     }, Promise.reject());
   }
 
+  var PDOK_LS = 'https://api.pdok.nl/bzk/locatieserver/search/v3_1/';
+  var PDOK_FL = 'weergavenaam,straatnaam,huisnummer,huisletter,huisnummertoevoeging,postcode,woonplaatsnaam,centroide_ll,type';
+  function pcFmt(pc) { return String(pc || '').replace(/^(\d{4})\s?([A-Za-z]{2})$/, function (m, a, b) { return a + ' ' + b.toUpperCase(); }); }
+  function pdokAddr(d) {
+    if (!d.straatnaam) return d.weergavenaam || '';
+    var nr = [d.huisnummer, d.huisletter, d.huisnummertoevoeging].filter(Boolean).join('');
+    var plaats = [pcFmt(d.postcode), d.woonplaatsnaam].filter(Boolean).join(' ');
+    return d.straatnaam + (nr ? ' ' + nr : '') + (plaats ? ', ' + plaats : '');
+  }
+  function pdokPoint(d) { var m = String(d.centroide_ll || '').match(/POINT\(\s*(-?[\d.]+)\s+(-?[\d.]+)\s*\)/); return m ? [+m[2], +m[1]] : null; }
+  // lijst met { lat, lon, label, addr }; eerst PDOK (NL), dan OpenStreetMap
+  function searchPlaces(q) {
+    return timeoutFetch(PDOK_LS + 'free?rows=5&fq=type:(adres%20OR%20weg%20OR%20woonplaats)&fl=' + PDOK_FL + '&q=' + encodeURIComponent(q), 5000)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        return ((j.response && j.response.docs) || []).map(function (d) { var pt = pdokPoint(d); return pt && { lat: pt[0], lon: pt[1], label: d.weergavenaam, addr: pdokAddr(d), exact: d.type === 'adres' }; }).filter(Boolean);
+      }).catch(function () { return []; })
+      .then(function (list) {
+        if (list.length) return list;
+        return timeoutFetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&accept-language=nl&q=' + encodeURIComponent(q), 8000)
+          .then(function (r) { return r.json(); })
+          .then(function (l) { return l.map(function (it) { return { lat: +it.lat, lon: +it.lon, label: it.display_name, addr: fmtAddr(it.address) || shortAddr(it.display_name), exact: !!(it.address && it.address.house_number) }; }); });
+      });
+  }
   function geocode(q) {
     setStatus('Zoeken...');
-    return timeoutFetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&accept-language=nl&q=' + encodeURIComponent(q), 8000)
-      .then(function (r) { return r.json(); })
-      .then(function (list) {
-        if (!list.length) { setStatus('Niets gevonden. Probeer een ander adres of tik op de kaart.', 'err'); return; }
-        if (list.length === 1) { pick(list[0]); return; }
-        setStatus('Kies de juiste locatie:');
-        var box = $('results'); box.innerHTML = '';
-        list.forEach(function (it) {
-          var b = document.createElement('button'); b.textContent = it.display_name;
-          b.onclick = function () { pick(it); }; box.appendChild(b);
-        });
-      })
-      .catch(function () { setStatus('Zoeken mislukt. Tik op de kaart of plak coördinaten.', 'err'); });
+    return searchPlaces(q).then(function (list) {
+      if (!list.length) { setStatus('Niets gevonden. Probeer een ander adres of tik op de kaart.', 'err'); return; }
+      if (list.length === 1) { pick(list[0]); return; }
+      setStatus('Kies de juiste locatie:');
+      var box = $('results'); box.innerHTML = '';
+      list.forEach(function (it) {
+        var b = document.createElement('button'); b.textContent = it.label;
+        b.onclick = function () { pick(it); }; box.appendChild(b);
+      });
+    }).catch(function () { setStatus('Zoeken mislukt. Tik op de kaart of plak coördinaten.', 'err'); });
   }
   function pick(it) {
-    setPoint(+it.lat, +it.lon, { addr: fmtAddr(it.address) || shortAddr(it.display_name), autoAddr: true });
+    setPoint(it.lat, it.lon, { addr: it.addr, autoAddr: true });
     setStatus('Locatie gezet. Sleep de pin om te verfijnen.', 'ok'); focusName();
+    if (!it.exact) showAddrNote('Geen exact adres gevonden, alleen de straat of plaats. Controleer het adres.');
   }
   function fmtAddr(a) {
     if (!a || !a.road) return '';
@@ -418,22 +456,36 @@ textarea.inp { resize: vertical; min-height: 64px; }
     $('addrNoteTxt').textContent = txt; $('addrNoteBtn').hidden = !btn; $('addrNote').hidden = false;
     $('addrNoteBtn').onclick = btn ? function () { setAddr(btn, true); update(); } : null;
   }
-  function reverse(lat, lon) {
-    var tok = state.revTok = (state.revTok || 0) + 1;
-    timeoutFetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=nl&lat=' + lat + '&lon=' + lon, 8000)
+  // { addr, note } voor een pin: PDOK (NL, met afstand tot het dichtstbijzijnde adres), anders OpenStreetMap
+  function addressAt(lat, lon) {
+    var viaOsm = function () {
+      return timeoutFetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=nl&lat=' + lat + '&lon=' + lon, 8000)
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j || !j.display_name) return null;
+          var a = j.address || {};
+          return { addr: fmtAddr(a) || shortAddr(j.display_name), note: a.house_number ? '' : 'Bij benadering: er is geen huisnummer gevonden op deze plek. Controleer het adres of pas het aan.' };
+        });
+    };
+    if (!inNL(lat, lon)) return viaOsm();
+    return timeoutFetch(PDOK_LS + 'reverse?type=adres&rows=1&lat=' + lat + '&lon=' + lon + '&fl=' + PDOK_FL + ',afstand', 5000)
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        if (tok !== state.revTok || !j || !j.display_name) return;
-        var a = j.address || {}, line = fmtAddr(a);
-        var txt = line || shortAddr(j.display_name), cur = $('addr').value.trim();
-        if (!cur || state.addrAuto) {
-          setAddr(txt, true);
-          if (!a.house_number) showAddrNote('Bij benadering: er is geen huisnummer gevonden op deze plek. Controleer het adres of pas het aan.');
-        } else if (txt !== cur) {
-          showAddrNote('Je pin staat nu bij: ' + txt, txt);
-        }
-        update();
-      }).catch(function () {});
+        var d = j.response && j.response.docs && j.response.docs[0]; if (!d) return null;
+        var dist = Math.round(+d.afstand || 0);
+        return { addr: pdokAddr(d), note: dist > 40 ? 'Dichtstbijzijnde adres, ongeveer ' + dist + ' m van de pin. Controleer of dit klopt.' : '' };
+      }).catch(function () { return null; })
+      .then(function (r) { return r || viaOsm(); });
+  }
+  function reverse(lat, lon) {
+    var tok = state.revTok = (state.revTok || 0) + 1;
+    addressAt(lat, lon).then(function (r) {
+      if (tok !== state.revTok || !r || !r.addr) return;
+      var cur = $('addr').value.trim();
+      if (!cur || state.addrAuto) { setAddr(r.addr, true); if (r.note) showAddrNote(r.note); }
+      else if (r.addr !== cur) showAddrNote('Je pin staat nu bij: ' + r.addr, r.addr);
+      update();
+    }).catch(function () {});
   }
 
   function busy(on) { $('go').classList.toggle('busy', on); }
@@ -462,7 +514,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       busy(true);
       resolveShort(q).then(function (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Link herkend.', 'ok'); focusName(); })
         .finally(function () { busy(false); })
-        .catch(function () { setStatus('Deze link kan ik niet openen. Open hem in Maps, kopieer de coördinaten of typ het adres.', 'err'); });
+        .catch(function () { setStatus('Deze korte link kan ik niet openen. Open hem in Google Maps, tik lang op de plek en kopieer de coördinaten, of typ het adres.', 'err'); });
       return;
     }
     busy(true); geocode(q).then(function () { busy(false); });
@@ -509,15 +561,15 @@ textarea.inp { resize: vertical; min-height: 64px; }
       if (tel) out.push('\uD83D\uDCDE ' + tel);
     }
     out.push('');
-    out.push('Locatie in Google Maps:');
-    out.push(googleUrl(state.lat, state.lon));
+    out.push(linkRoute() ? 'Route in Google Maps:' : 'Locatie in Google Maps:');
+    out.push(linkRoute() ? routeUrl(state.lat, state.lon) : googleUrl(state.lat, state.lon));
     return out.join('\n').replace(/^\n+/, '');
   }
   function saveDraft() {
     var d = { lat: state.lat, lon: state.lon }; FIELDS.forEach(function (f) { d[f] = $(f).value; }); lsSet(LS.draft, JSON.stringify(d));
   }
   function update() {
-    saveDraft();
+    saveDraft(); schedulePrebuild();
     var m = message(), has = state.lat != null;
     $('preview').innerHTML = has ? esc(m).replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\*([^*\n]+)\*/g, '<b>$1</b>') : '<span class="hint">Het bericht verschijnt hier zodra je een locatie hebt.</span>';
     ['copy', 'wa', 'img'].forEach(function (id) { $(id).disabled = !has; });
@@ -554,7 +606,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     })(tx, ty);
     return Promise.all(jobs).then(function (tiles) {
       var ok = tiles.filter(function (t) { return t.im; }).length;
-      return { key: key, ok: ok, draw: function (g) {
+      return { key: key, ok: ok, total: tiles.length, draw: function (g) {
         tiles.forEach(function (t) { if (t.im) g.drawImage(t.im, (t.tx * 256 - x0) * k, (t.ty * 256 - y0) * k, 256 * k + 1, 256 * k + 1); });
       } };
     });
@@ -696,7 +748,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
       o2.save(); o2.shadowColor = 'rgba(0,31,56,.32)'; o2.shadowBlur = 30; o2.shadowOffsetY = 10; o2.fillStyle = '#fff';
       rrect2(o2, M, M, W, H, RT, RB); o2.fill(); o2.restore();
       o2.save(); rrect2(o2, M, M, W, H, RT, RB); o2.clip(); o2.drawImage(cv, M, M); o2.restore();
-      return new Promise(function (res, rej) { out.toBlob(function (bl) { bl ? res(bl) : rej(new Error('export')); }, 'image/jpeg', .92); });
+      var incomplete = ls[0].ok < ls[0].total * 0.9;
+      return new Promise(function (res, rej) { out.toBlob(function (bl) { bl ? res({ blob: bl, incomplete: incomplete }) : rej(new Error('export')); }, 'image/jpeg', .92); });
     });
   }
   function rrect2(g, x, y, w, h, rt, rb) {
@@ -717,15 +770,47 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
   function clip(g, t, w) { while (g.measureText(t).width > w && t.length > 1) t = t.slice(0, -2) + '…'; return t; }
 
+  // afbeelding op de achtergrond klaarzetten, zodat delen direct kan (iOS wil dat delen vlak na je tik gebeurt)
+  var pre = { sig: '', promise: null }, preT = 0;
+  function imgSig() {
+    var v = {}; ['nr', 'name', 'addr', 'plabel', 'myName', 'myPhone', 'myRole'].forEach(function (k) { v[k] = $(k).value; });
+    v.w = $('useWho').checked; v.t = $('usePhone').checked; v.lat = state.lat; v.lon = state.lon; v.r = state.range; v.l = state.layer; v.o = state.opts;
+    return JSON.stringify(v);
+  }
+  function getImage(force) {
+    var sig = imgSig();
+    if (!force && pre.promise && pre.sig === sig) return pre.promise;
+    pre.sig = sig; pre.promise = buildImage();
+    pre.promise.catch(function () { if (pre.sig === sig) pre.promise = null; });
+    return pre.promise;
+  }
+  function schedulePrebuild() {
+    clearTimeout(preT);
+    if (state.lat == null) return;
+    preT = setTimeout(function () { if (!document.hidden && state.lat != null && pre.sig !== imgSig()) getImage().catch(function () {}); }, 1500);
+  }
+  function fallbackSave(blob, name, msg, text) {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    copyText(msg); saveProject(true); toast(text);
+  }
+  var warned = '';
   function shareImage() {
     var b = $('img'); b.disabled = true; b.textContent = 'Bezig...';
-    var msg = message();
-    buildImage().then(function (blob) {
-      var f = new File([blob], ((label() || 'locatie').replace(/[^\w\-]+/g, '_')) + '.jpg', { type: 'image/jpeg' });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) return navigator.share({ files: [f], text: msg }).then(function () { saveProject(true); }).catch(function (e) { if (e && e.name !== 'AbortError') throw e; });
-      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = f.name; a.click();
-      copyText(msg); saveProject(true); toast('Afbeelding opgeslagen, bericht gekopieerd');
-    }).catch(function () { toast('Afbeelding maken mislukt'); })
+    var msg = message(), sig = imgSig();
+    getImage().then(function (res) {
+      if (res.incomplete && warned !== sig) {
+        warned = sig; pre.promise = null;
+        toast('Kaart is niet helemaal geladen. Tik nogmaals om toch te delen.'); return;
+      }
+      var blob = res.blob, f = new File([blob], ((label() || 'locatie').replace(/[^\w\-]+/g, '_')) + '.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        return navigator.share({ files: [f], text: msg }).then(function () { saveProject(true); }).catch(function (e) {
+          if (e && e.name === 'AbortError') return;
+          fallbackSave(blob, f.name, msg, 'Delen werd geblokkeerd. Afbeelding opgeslagen, bericht gekopieerd.');
+        });
+      }
+      fallbackSave(blob, f.name, msg, 'Afbeelding opgeslagen, bericht gekopieerd');
+    }).catch(function () { pre.promise = null; toast('Kaart niet bereikbaar. Controleer je verbinding en probeer opnieuw.'); })
       .finally(function () { b.disabled = false; b.textContent = 'Deel afbeelding'; update(); });
   }
 
@@ -816,6 +901,9 @@ textarea.inp { resize: vertical; min-height: 64px; }
     el.checked = state.opts[k];
     el.onchange = function () { state.opts[k] = this.checked; lsSet('locdelen.opt.' + k, this.checked ? '1' : '0'); applyLayers(); };
   });
+  function paintLink() { [].forEach.call($('linkmode').children, function (b) { b.setAttribute('aria-pressed', (b.dataset.k === 'route') === linkRoute() ? 'true' : 'false'); }); }
+  $('linkmode').onclick = function (e) { var k = e.target.dataset.k; if (!k) return; lsSet('locdelen.link', k); paintLink(); update(); };
+  paintLink();
   $('layer').onclick = function (e) { if (e.target.dataset.l) setLayer(e.target.dataset.l); };
   setLayer(lsGet('locdelen.layer', 'sat') === 'map' ? 'map' : 'sat');
   $('go').onclick = lookup;

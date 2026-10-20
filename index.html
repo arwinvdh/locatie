@@ -416,12 +416,18 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
   var FIELDS = ['nr', 'name', 'addr', 'note', 'via', 'arrive', 'plabel'];
   function label() { return [$('nr').value.trim(), $('name').value.trim()].filter(Boolean).join(' \u00B7 '); }
+  function addrLines(a) {
+    var i = a.indexOf(',');
+    return i > 0 ? [a.slice(0, i).trim(), a.slice(i + 1).trim()].filter(Boolean) : (a ? [a] : []);
+  }
   function message() {
     if (state.lat == null) return '';
     var title = label(), addr = $('addr').value.trim(), note = $('note').value.trim(), pl = $('plabel').value, via = $('via').value.trim(), arr = $('arrive').value.trim(), out = [];
     var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? phoneFmt($('myPhone').value) : '';
     if (title) out.push('\uD83C\uDFD7\uFE0F *' + title + '*');
-    if (addr || pl) out.push('\uD83D\uDCCD ' + (pl ? pl + (addr ? ': ' : '') : '') + addr);
+    var al = addrLines(addr);
+    if (pl) { out.push('\uD83D\uDCCD *' + pl + '*'); al.forEach(function (l) { out.push(l); }); }
+    else al.forEach(function (l, i) { out.push((i ? '' : '\uD83D\uDCCD ') + l); });
     if (via) out.push('\uD83D\uDE9A Aanrijden via: ' + via);
     if (arr) out.push('\uD83D\uDEAA Bij aankomst: ' + arr);
     if (note) out.push('\u2139\uFE0F ' + note);
@@ -604,7 +610,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       if (nr) { g.font = '600 30px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = '#8fd000'; g.fillText(clip(g, nr, lw), 36, ty); ty += 58; } else ty += 12;
       g.font = '700 56px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = '#fff'; if (nm || !nr) { g.fillText(clip(g, nm || 'Locatie', lw), 36, ty); ty += 50; }
       g.font = '30px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.88)';
-      wrap(g, addr || (fmt(lat) + ', ' + fmt(lon)), lw, 2).forEach(function (ln) { g.fillText(ln, 36, ty); ty += 38; });
+      (addr ? addrLines(addr).reduce(function (acc, l) { return acc.concat(wrap(g, l, lw, 1)); }, []) : [fmt(lat) + ', ' + fmt(lon)]).forEach(function (ln) { g.fillText(ln, 36, ty); ty += 38; });
       g.font = '14px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.5)'; g.textAlign = 'right';
       g.fillText(credits.join(' \u00B7 '), W - 14, H - 8);
       // witte rand met schaduw. Gemeten in een iOS-screenshot: WhatsApp zet ~6,9% van de breedte als buitenradius en snijdt ~2,4% per zijde af,

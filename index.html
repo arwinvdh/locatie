@@ -422,15 +422,6 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.save(); g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 10; g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 5;
       g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x - 46, y - 44, x - 40, y - 100, x, y - 100); g.bezierCurveTo(x + 40, y - 100, x + 46, y - 44, x, y); g.closePath(); g.fill(); g.stroke();
       g.restore(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y - 66, 13, 0, 7); g.fill();
-      // schaalbalk (linksonder boven de balk)
-      var steps = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000], maxM = W * 0.22 * mpp, m = steps[0];
-      steps.forEach(function (v) { if (v <= maxM) m = v; });
-      var bw = m / mpp, bx = 36, by = H - 170 - 40, lab = m >= 1000 ? (m / 1000) + ' km' : m + ' m';
-      g.font = '600 24px system-ui, sans-serif';
-      var cw = Math.max(bw, g.measureText(lab).width) + 32;
-      g.fillStyle = 'rgba(255,255,255,.88)'; rrect(g, bx - 16, by - 46, cw, 72, 10); g.fill();
-      g.strokeStyle = '#111'; g.lineWidth = 4; g.beginPath(); g.moveTo(bx, by - 8); g.lineTo(bx, by + 8); g.moveTo(bx, by); g.lineTo(bx + bw, by); g.moveTo(bx + bw, by - 8); g.lineTo(bx + bw, by + 8); g.stroke();
-      g.fillStyle = '#111'; g.textAlign = 'left'; g.fillText(lab, bx, by - 16);
       // noordpijl (rechtsboven)
       var nx = W - 64, ny = 64;
       g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.arc(nx, ny, 40, 0, 7); g.fill();

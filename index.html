@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Locatie delen</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root {
+  --bg: #F3F4F6; --surface: #FFFFFF; --field: #FFFFFF; --ink: #1F2933; --ink-2: #616E7C;
+  --line: #D2D6DC; --accent: #1F5FBF; --on-accent: #FFFFFF; --warn: #B42318; --ok: #1B7442;
+  --wa-wall: #EAE3D8; --wa-bubble: #D9FDD3; --wa-text: #111B21; --wa-link: #027EB5;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --surface: #1A1F25; --field: #12161B; --ink: #E6E9ED; --ink-2: #9AA5B1;
+    --line: #2E3640; --accent: #5B9DFF; --on-accent: #0B1B33; --warn: #FF8A7A; --ok: #5FD08A;
+    --wa-wall: #0B141A; --wa-bubble: #005C4B; --wa-text: #E9EDEF; --wa-link: #53BDEB; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: .9375rem; line-height: 1.4; }
+.wrap { max-width: 64rem; margin-inline: auto; padding: 1rem max(16px, env(safe-area-inset-right)) 6rem max(16px, env(safe-area-inset-left)); }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1 { margin: 0 0 .75rem; font-size: 1.125rem; font-weight: 600; }
+h2 { margin: 0 0 .5rem; font-size: .8125rem; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 48rem) { .grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; } .sticky { position: sticky; top: 1rem; } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .875rem; display: grid; gap: .6rem; }
+.row { display: flex; gap: .4rem; align-items: stretch; flex-wrap: wrap; }
+.row > .grow { flex: 1; min-width: 0; }
+.field { display: grid; gap: .15rem; }
+.field > label { font-size: .8125rem; color: var(--ink-2); }
+.inp { width: 100%; min-height: 44px; padding: .4rem .6rem; border: 1px solid var(--line); border-radius: 6px; background: var(--field); font-size: 1rem; }
+textarea.inp { resize: vertical; min-height: 64px; }
+.btn { min-height: 44px; padding: .35rem .875rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-weight: 500; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; text-align: center; }
+.btn:hover:not(:disabled) { border-color: var(--ink-2); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.danger { color: var(--warn); border-color: var(--warn); }
+.btn.sm { min-height: 36px; padding: .2rem .6rem; font-size: .875rem; }
+.seg { display: inline-grid; grid-auto-flow: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { min-height: 36px; padding: 0 .75rem; border: 0; border-right: 1px solid var(--line); background: var(--field); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+#map { height: 320px; border-radius: 8px; border: 1px solid var(--line); z-index: 0; }
+.viewer #map { height: 55vh; min-height: 280px; }
+.pin { width: 28px; height: 28px; margin: -28px 0 0 -14px; background: #E5322D; border: 2px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.pin::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: #fff; }
+.hint { font-size: .8125rem; color: var(--ink-2); margin: 0; }
+.hint.err { color: var(--warn); }
+.hint.ok { color: var(--ok); }
+.results { display: grid; gap: .25rem; }
+.results button { text-align: left; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 6px; background: var(--field); cursor: pointer; }
+.wa { background: var(--wa-wall); border-radius: 10px; padding: .75rem; }
+.wa-b { background: var(--wa-bubble); color: var(--wa-text); border-radius: 8px; padding: .5rem .65rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .9rem; }
+.wa-b a { color: var(--wa-link); }
+.proj { display: grid; grid-template-columns: 1fr auto; gap: .4rem; align-items: center; padding: .5rem 0; border-top: 1px solid var(--line); }
+.proj:first-child { border-top: 0; }
+.proj-main { text-align: left; background: none; border: 0; padding: .25rem 0; cursor: pointer; min-width: 0; }
+.proj-main b, .proj-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-main span { color: var(--ink-2); font-size: .8125rem; }
+.check { display: flex; gap: .5rem; align-items: center; min-height: 36px; }
+.check input { width: 20px; height: 20px; }
+.nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
+.vtitle { font-size: 1.25rem; font-weight: 600; margin: 0; }
+.bar { position: fixed; inset: auto 0 0; padding: .6rem max(16px, env(safe-area-inset-right)) calc(.6rem + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: var(--bg); border-top: 1px solid var(--line); z-index: 500; }
+.bar .in { max-width: 64rem; margin-inline: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .4rem; }
+.toast { position: fixed; left: 50%; bottom: 5.5rem; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: .5rem .9rem; border-radius: 8px; z-index: 900; font-size: .875rem; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+
+<!-- Ontvanger-weergave -->
+<section id="viewer" hidden>
+  <div class="card">
+    <p class="vtitle" id="v-title"></p>
+    <p class="hint" id="v-addr"></p>
+    <p id="v-note" style="margin:0;white-space:pre-wrap"></p>
+    <div id="map-v-slot"></div>
+    <div class="nav">
+      <a class="btn primary" id="v-g" target="_blank" rel="noopener">Google Maps</a>
+      <a class="btn" id="v-a" target="_blank" rel="noopener">Apple Maps</a>
+      <a class="btn" id="v-w" target="_blank" rel="noopener">Waze</a>
+    </div>
+  </div>
+</section>
+
+<!-- Maker-weergave -->
+<section id="editor">
+  <h1>Locatie delen</h1>
+  <div class="grid">
+    <div style="display:grid;gap:1rem">
+      <div class="card">
+        <h2>1 &middot; Locatie</h2>
+        <div class="row">
+          <input class="inp grow" id="q" placeholder="Maps-link, coördinaten of adres" autocomplete="off" enterkeyhint="search">
+          <button class="btn primary" id="go">Zoek</button>
+          <button class="btn" id="me" title="Mijn locatie">Hier</button>
+        </div>
+        <p class="hint" id="status">Plak een Google Maps-link, coördinaten (52.0907, 5.1214) of typ een adres. Of tik op de kaart.</p>
+        <div class="results" id="results"></div>
+        <div id="map-e-slot"><div id="map"></div></div>
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <div class="seg" id="layer"><button data-l="sat" aria-pressed="true">Satelliet</button><button data-l="map" aria-pressed="false">Kaart</button></div>
+          <span class="hint" id="coords"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>2 &middot; Details</h2>
+        <div class="field"><label for="name">Projectnaam</label><input class="inp" id="name" placeholder="Bijv. Nieuwbouw Zuidpoort" autocomplete="off"></div>
+        <div class="field"><label for="addr">Adres</label><input class="inp" id="addr" autocomplete="off"></div>
+        <div class="field"><label for="note">Notitie</label><textarea class="inp" id="note" placeholder="Bijv. ingang via de achterpoort, bel bij aankomst"></textarea></div>
+      </div>
+    </div>
+
+    <div style="display:grid;gap:1rem" class="sticky">
+      <div class="card">
+        <h2>3 &middot; Versturen</h2>
+        <label class="check"><input type="checkbox" id="inclShare"> Deelpagina met satelliet meesturen</label>
+        <p class="hint" id="shareHint"></p>
+        <div class="wa"><div class="wa-b" id="preview"></div></div>
+        <div class="row">
+          <div class="seg" id="range"><button data-r="150" aria-pressed="false">Dichtbij</button><button data-r="400" aria-pressed="true">Midden</button><button data-r="1200" aria-pressed="false">Ruim</button></div>
+          <span class="hint" style="align-self:center">bereik afbeelding</span>
+        </div>
+        <button class="btn" id="saveP">Opslaan als project</button>
+      </div>
+      <div class="card">
+        <h2>Projecten</h2>
+        <input class="inp" id="filter" placeholder="Zoek in projecten" hidden>
+        <div id="plist"></div>
+        <div class="row">
+          <button class="btn sm" id="exp">Exporteer</button>
+          <button class="btn sm" id="imp">Importeer</button>
+          <input type="file" id="impf" accept="application/json" hidden>
+        </div>
+        <p class="hint">Projecten staan alleen op dit apparaat. Exporteer om ze op een ander apparaat te zetten.</p>
+        <details><summary class="hint" style="cursor:pointer">Instellingen</summary>
+          <div class="field" style="margin-top:.5rem"><label for="base">Basis-URL van deze pagina (voor de deellink)</label><input class="inp" id="base" placeholder="https://jouwnaam.github.io/locatie-delen.html" autocomplete="off"></div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <div class="bar"><div class="in">
+    <button class="btn primary" id="copy" disabled>Kopieer</button>
+    <button class="btn" id="wa" disabled>WhatsApp</button>
+    <button class="btn" id="img" disabled>Deel afbeelding</button>
+  </div></div>
+</section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var LS = { projects: 'locdelen.projects', base: 'locdelen.base', range: 'locdelen.range', share: 'locdelen.share' };
+  function lsGet(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  var state = { lat: null, lon: null, range: +lsGet(LS.range, 400) };
+  var map, marker, layers = {};
+
+  /* ---------- helpers ---------- */
+  function toast(t) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 2200); }
+  function setStatus(t, cls) { var s = $('status'); s.textContent = t; s.className = 'hint' + (cls ? ' ' + cls : ''); }
+  function fmt(n) { return (+n).toFixed(6).replace(/0+$/, '').replace(/\.$/, ''); }
+  function validLL(a, b) { return isFinite(a) && isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180; }
+  function googleUrl(lat, lon) { return 'https://www.google.com/maps?q=' + fmt(lat) + ',' + fmt(lon); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  /* ---------- kaart ---------- */
+  function initMap(el, interactive) {
+    map = L.map(el, { zoomControl: true, dragging: true, scrollWheelZoom: interactive, tap: false }).setView([52.1, 5.3], 7);
+    layers.sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Esri, Maxar, Earthstar Geographics' });
+    layers.map = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
+    layers.sat.addTo(map);
+    map.attributionControl.setPrefix(false);
+    return map;
+  }
+  function setLayer(l) {
+    var other = l === 'sat' ? 'map' : 'sat';
+    if (map.hasLayer(layers[other])) map.removeLayer(layers[other]);
+    layers[l].addTo(map);
+    var seg = $('layer');
+    if (seg) [].forEach.call(seg.children, function (b) { b.setAttribute('aria-pressed', b.dataset.l === l ? 'true' : 'false'); });
+  }
+  function pinIcon() { return L.divIcon({ className: '', html: '<div class="pin"></div>', iconSize: [0, 0] }); }
+  function placePin(lat, lon, draggable, fly) {
+    if (marker) marker.setLatLng([lat, lon]);
+    else {
+      marker = L.marker([lat, lon], { icon: pinIcon(), draggable: !!draggable }).addTo(map);
+      if (draggable) marker.on('dragend', function () { var p = marker.getLatLng(); setPoint(p.lat, p.lng, { reverse: true, keepView: true }); });
+    }
+    if (fly) map.setView([lat, lon], Math.max(map.getZoom(), 17));
+  }
+
+  /* ---------- locatie zetten ---------- */
+  function setPoint(lat, lon, o) {
+    o = o || {};
+    state.lat = lat; state.lon = lon;
+    placePin(lat, lon, true, !o.keepView);
+    $('coords').textContent = fmt(lat) + ', ' + fmt(lon);
+    $('results').innerHTML = '';
+    if (o.addr) $('addr').value = o.addr;
+    else if (o.reverse) reverse(lat, lon);
+    update();
+  }
+
+  function parseCoords(s) {
+    var m;
+    m = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) ||
+        s.match(/[?&](?:q|ll|query|center|destination|daddr)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i) ||
+        s.match(/^\s*(-?\d{1,3}\.\d+)\s*[,; ]\s*(-?\d{1,3}\.\d+)\s*$/);
+    if (m && validLL(+m[1], +m[2])) return [+m[1], +m[2]];
+    // graden/minuten/seconden: 52°05'26.5"N 5°07'17.1"E
+    var d = s.match(/(\d+)°\s*(\d+)['′]\s*([\d.]+)["″]?\s*([NZSn])[\s,]+(\d+)°\s*(\d+)['′]\s*([\d.]+)["″]?\s*([EOWeo])/i);
+    if (d) {
+      var la = +d[1] + d[2] / 60 + d[3] / 3600, lo = +d[5] + d[6] / 60 + d[7] / 3600;
+      if (/[SZ]/i.test(d[4])) la = -la; if (/W/i.test(d[8])) lo = -lo;
+      if (validLL(la, lo)) return [la, lo];
+    }
+    return null;
+  }
+
+  function timeoutFetch(url, ms) {
+    var c = new AbortController(), t = setTimeout(function () { c.abort(); }, ms);
+    return fetch(url, { signal: c.signal }).finally(function () { clearTimeout(t); });
+  }
+
+  function resolveShort(url) {
+    // Best effort via publieke CORS-proxy; kan falen. Zoekt coördinaten in de HTML van de doelpagina.
+    var proxies = ['https://corsproxy.io/?url=' + encodeURIComponent(url), 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url)];
+    return proxies.reduce(function (p, px) {
+      return p.catch(function () {
+        return timeoutFetch(px, 7000).then(function (r) { return r.text(); }).then(function (t) {
+          var c = parseCoords(t.replace(/\\u003d/g, '=').replace(/\\u0026/g, '&')) ||
+                  (function () { var m = t.match(/center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)/); return m ? [+m[1], +m[2]] : null; })() ||
+                  (function () { var m = t.match(/\[null,null,(-?\d+\.\d+),(-?\d+\.\d+)\]/); return m ? [+m[2], +m[1]] : null; })();
+          if (!c) throw new Error('geen coördinaten');
+          return c;
+        });
+      });
+    }, Promise.reject());
+  }
+
+  function geocode(q) {
+    setStatus('Zoeken...');
+    return timeoutFetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=0&limit=5&accept-language=nl&q=' + encodeURIComponent(q), 8000)
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        if (!list.length) { setStatus('Niets gevonden. Probeer een ander adres of tik op de kaart.', 'err'); return; }
+        if (list.length === 1) { pick(list[0]); return; }
+        setStatus('Kies de juiste locatie:');
+        var box = $('results'); box.innerHTML = '';
+        list.forEach(function (it) {
+          var b = document.createElement('button'); b.textContent = it.display_name;
+          b.onclick = function () { pick(it); }; box.appendChild(b);
+        });
+      })
+      .catch(function () { setStatus('Zoeken mislukt. Tik op de kaart of plak coördinaten.', 'err'); });
+  }
+  function pick(it) {
+    setPoint(+it.lat, +it.lon, { addr: shortAddr(it.display_name) });
+    setStatus('Locatie gezet. Sleep de pin om te verfijnen.', 'ok');
+  }
+  function shortAddr(s) { return s.split(',').slice(0, 4).join(',').trim(); }
+
+  function reverse(lat, lon) {
+    timeoutFetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=nl&lat=' + lat + '&lon=' + lon, 8000)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.display_name) return;
+        var a = j.address || {}, line = '';
+        if (a.road) line = a.road + (a.house_number ? ' ' + a.house_number : '') + ', ' + [a.postcode, a.city || a.town || a.village || a.municipality].filter(Boolean).join(' ');
+        $('addr').value = line || shortAddr(j.display_name);
+        update();
+      }).catch(function () {});
+  }
+
+  function lookup() {
+    var q = $('q').value.trim();
+    if (!q) return;
+    var c = parseCoords(q);
+    if (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Coördinaten herkend. Sleep de pin om te verfijnen.', 'ok'); return; }
+    if (/^https?:\/\//i.test(q)) {
+      setStatus('Korte link uitzoeken...');
+      resolveShort(q).then(function (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Link herkend.', 'ok'); })
+        .catch(function () { setStatus('Deze link kan ik niet openen. Open hem in Maps, kopieer de coördinaten of typ het adres.', 'err'); });
+      return;
+    }
+    geocode(q);
+  }
+
+  /* ---------- bericht ---------- */
+  function shareUrl() {
+    var base = $('base').value.trim();
+    if (!base) { if (/^https?:/.test(location.protocol)) base = location.origin + location.pathname; else return ''; }
+    var u = base + '?lat=' + fmt(state.lat) + '&lon=' + fmt(state.lon);
+    if ($('name').value.trim()) u += '&n=' + encodeURIComponent($('name').value.trim());
+    if ($('addr').value.trim()) u += '&a=' + encodeURIComponent($('addr').value.trim());
+    if ($('note').value.trim()) u += '&t=' + encodeURIComponent($('note').value.trim());
+    return u;
+  }
+  function message() {
+    if (state.lat == null) return '';
+    var name = $('name').value.trim(), addr = $('addr').value.trim(), note = $('note').value.trim(), out = [];
+    if (name) out.push('*' + name + '*');
+    if (addr) out.push(addr);
+    if (note) out.push(note);
+    out.push('');
+    out.push(googleUrl(state.lat, state.lon));
+    if ($('inclShare').checked) { var s = shareUrl(); if (s) { out.push(''); out.push('Satelliet en navigatie: ' + s); } }
+    return out.join('\n').replace(/^\n+/, '');
+  }
+  function update() {
+    var m = message(), has = state.lat != null;
+    $('preview').innerHTML = has ? esc(m).replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\*([^*\n]+)\*/g, '<b>$1</b>') : '<span class="hint">Het bericht verschijnt hier zodra je een locatie hebt.</span>';
+    ['copy', 'wa', 'img', 'saveP'].forEach(function (id) { $(id).disabled = !has; });
+    var noShare = !shareUrl() && state.lat != null;
+    $('shareHint').textContent = $('inclShare').checked && noShare ? 'Zet de pagina online (bijv. GitHub Pages) of vul de basis-URL in bij Instellingen.' : '';
+  }
+
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t);
+    var ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {} ta.remove(); return Promise.resolve();
+  }
+
+  /* ---------- afbeelding ---------- */
+  function buildImage() {
+    var W = 1080, H = 810, R = 6378137, lat = state.lat, lon = state.lon;
+    var mx = R * lon * Math.PI / 180, my = R * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+    var hw = (state.range / 2) / Math.cos(lat * Math.PI / 180), hh = hw * H / W;
+    var url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=' +
+      [mx - hw, my - hh, mx + hw, my + hh].join(',') + '&bboxSR=3857&imageSR=3857&size=' + W + ',' + H + '&format=jpg&f=image';
+    return new Promise(function (res, rej) {
+      var im = new Image(); im.crossOrigin = 'anonymous';
+      im.onload = function () {
+        var c = document.createElement('canvas'); c.width = W; c.height = H; var g = c.getContext('2d');
+        g.drawImage(im, 0, 0, W, H);
+        // pin
+        var x = W / 2, y = H / 2;
+        g.save(); g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 10; g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 5;
+        g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x - 46, y - 44, x - 40, y - 100, x, y - 100); g.bezierCurveTo(x + 40, y - 100, x + 46, y - 44, x, y); g.closePath(); g.fill(); g.stroke();
+        g.restore(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y - 66, 13, 0, 7); g.fill();
+        // onderbalk
+        var name = $('name').value.trim(), addr = $('addr').value.trim();
+        g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, H - 150, W, 150);
+        g.fillStyle = '#fff'; g.textBaseline = 'alphabetic';
+        g.font = '600 46px system-ui, sans-serif'; g.fillText(clip(g, name || 'Locatie', W - 60), 30, H - 90);
+        g.font = '30px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.88)';
+        g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), W - 60), 30, H - 42);
+        g.font = '16px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.7)'; g.textAlign = 'right';
+        g.fillText('Esri, Maxar, Earthstar Geographics', W - 12, H - 10);
+        c.toBlob(function (b) { b ? res(b) : rej(); }, 'image/jpeg', .9);
+      };
+      im.onerror = rej; im.src = url;
+    });
+  }
+  function clip(g, t, w) { while (g.measureText(t).width > w && t.length > 1) t = t.slice(0, -2) + '…'; return t; }
+
+  function shareImage() {
+    var b = $('img'); b.disabled = true; b.textContent = 'Bezig...';
+    var msg = message();
+    buildImage().then(function (blob) {
+      var f = new File([blob], ((($('name').value.trim() || 'locatie')).replace(/[^\w\-]+/g, '_')) + '.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) return navigator.share({ files: [f], text: msg }).catch(function (e) { if (e && e.name !== 'AbortError') throw e; });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = f.name; a.click();
+      copyText(msg); toast('Afbeelding opgeslagen, bericht gekopieerd');
+    }).catch(function () { toast('Afbeelding maken mislukt'); })
+      .finally(function () { b.disabled = false; b.textContent = 'Deel afbeelding'; update(); });
+  }
+
+  /* ---------- projecten ---------- */
+  function getP() { try { return JSON.parse(lsGet(LS.projects, '[]')) || []; } catch (e) { return []; } }
+  function setP(a) { lsSet(LS.projects, JSON.stringify(a)); renderP(); }
+  function saveProject() {
+    if (state.lat == null) return;
+    var name = $('name').value.trim();
+    if (!name) { toast('Geef eerst een projectnaam'); $('name').focus(); return; }
+    var a = getP(), rec = { name: name, addr: $('addr').value.trim(), note: $('note').value.trim(), lat: state.lat, lon: state.lon, ts: Date.now() };
+    var i = a.findIndex(function (p) { return p.name.toLowerCase() === name.toLowerCase(); });
+    if (i >= 0) a[i] = rec; else a.unshift(rec);
+    setP(a); toast(i >= 0 ? 'Project bijgewerkt' : 'Project opgeslagen');
+  }
+  function renderP() {
+    var a = getP(), f = $('filter').value.trim().toLowerCase(), box = $('plist');
+    $('filter').hidden = a.length < 6;
+    a = a.filter(function (p) { return !f || (p.name + ' ' + p.addr).toLowerCase().indexOf(f) >= 0; });
+    box.innerHTML = '';
+    if (!a.length) { box.innerHTML = '<p class="hint">Nog geen projecten opgeslagen.</p>'; return; }
+    a.forEach(function (p) {
+      var d = document.createElement('div'); d.className = 'proj';
+      d.innerHTML = '<button class="proj-main"><b>' + esc(p.name) + '</b><span>' + esc(p.addr || (fmt(p.lat) + ', ' + fmt(p.lon))) + '</span></button><button class="btn sm danger" aria-label="Verwijder ' + esc(p.name) + '">&times;</button>';
+      d.children[0].onclick = function () {
+        $('name').value = p.name; $('addr').value = p.addr || ''; $('note').value = p.note || '';
+        setPoint(p.lat, p.lon, { addr: p.addr || '' }); window.scrollTo({ top: 0, behavior: 'smooth' }); setStatus('Project geladen.', 'ok');
+      };
+      d.children[1].onclick = function () { if (confirm('"' + p.name + '" verwijderen?')) setP(getP().filter(function (x) { return x.ts !== p.ts || x.name !== p.name; })); };
+      box.appendChild(d);
+    });
+  }
+
+  /* ---------- viewer ---------- */
+  function startViewer(q) {
+    document.body.classList.add('viewer');
+    $('editor').hidden = true; $('viewer').hidden = false;
+    var lat = +q.get('lat'), lon = +q.get('lon');
+    $('v-title').textContent = q.get('n') || 'Locatie';
+    $('v-addr').textContent = q.get('a') || (fmt(lat) + ', ' + fmt(lon));
+    $('v-note').textContent = q.get('t') || ''; $('v-note').hidden = !q.get('t');
+    document.title = q.get('n') || 'Locatie';
+    var host = $('map-v-slot'); var m = document.createElement('div'); m.id = 'map'; host.appendChild(m);
+    initMap(m, true); map.setView([lat, lon], 18);
+    var seg = document.createElement('div'); seg.className = 'seg'; seg.id = 'layer'; seg.style.margin = '.5rem 0 0';
+    seg.innerHTML = '<button data-l="sat" aria-pressed="true">Satelliet</button><button data-l="map" aria-pressed="false">Kaart</button>';
+    seg.onclick = function (e) { if (e.target.dataset.l) setLayer(e.target.dataset.l); }; host.appendChild(seg);
+    placePin(lat, lon, false, false);
+    $('v-g').href = googleUrl(lat, lon);
+    $('v-a').href = 'https://maps.apple.com/?ll=' + fmt(lat) + ',' + fmt(lon) + '&q=' + encodeURIComponent(q.get('n') || 'Locatie');
+    $('v-w').href = 'https://waze.com/ul?ll=' + fmt(lat) + ',' + fmt(lon) + '&navigate=yes';
+  }
+
+  /* ---------- init ---------- */
+  var params = new URLSearchParams(location.search);
+  if (validLL(parseFloat(params.get('lat')), parseFloat(params.get('lon'))) && params.get('lat') !== null) { startViewer(params); return; }
+
+  initMap($('map'), false);
+  map.on('click', function (e) { setPoint(e.latlng.lat, e.latlng.lng, { reverse: true, keepView: true }); setStatus('Pin geplaatst. Sleep om te verfijnen.', 'ok'); });
+  $('layer').onclick = function (e) { if (e.target.dataset.l) setLayer(e.target.dataset.l); };
+  $('go').onclick = lookup;
+  $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookup(); });
+  $('q').addEventListener('paste', function () { setTimeout(function () { if (/^https?:|^\s*-?\d+\.\d+/.test($('q').value)) lookup(); }, 30); });
+  $('me').onclick = function () {
+    if (!navigator.geolocation) { setStatus('Locatie niet beschikbaar op dit apparaat.', 'err'); return; }
+    setStatus('Locatie bepalen...');
+    navigator.geolocation.getCurrentPosition(function (p) { setPoint(p.coords.latitude, p.coords.longitude, { reverse: true }); setStatus('Je huidige locatie. Sleep de pin om te verfijnen.', 'ok'); },
+      function () { setStatus('Geen toegang tot je locatie.', 'err'); }, { enableHighAccuracy: true, timeout: 10000 });
+  };
+  ['name', 'addr', 'note', 'base'].forEach(function (id) { $(id).addEventListener('input', function () { if (id === 'base') lsSet(LS.base, $('base').value.trim()); update(); }); });
+  $('base').value = lsGet(LS.base, '');
+  $('inclShare').checked = lsGet(LS.share, '1') === '1';
+  $('inclShare').onchange = function () { lsSet(LS.share, this.checked ? '1' : '0'); update(); };
+  $('range').onclick = function (e) {
+    var r = e.target.dataset.r; if (!r) return; state.range = +r; lsSet(LS.range, r);
+    [].forEach.call($('range').children, function (b) { b.setAttribute('aria-pressed', b.dataset.r === r ? 'true' : 'false'); });
+  };
+  [].forEach.call($('range').children, function (b) { b.setAttribute('aria-pressed', +b.dataset.r === state.range ? 'true' : 'false'); });
+  $('copy').onclick = function () { copyText(message()).then(function () { toast('Gekopieerd'); }); };
+  $('wa').onclick = function () { window.open('https://wa.me/?text=' + encodeURIComponent(message()), '_blank'); };
+  $('img').onclick = shareImage;
+  $('saveP').onclick = saveProject;
+  $('filter').oninput = renderP;
+  $('exp').onclick = function () {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(getP(), null, 2)], { type: 'application/json' }));
+    a.download = 'locaties.json'; a.click();
+  };
+  $('imp').onclick = function () { $('impf').click(); };
+  $('impf').onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    f.text().then(function (t) {
+      var inc = JSON.parse(t), cur = getP();
+      if (!Array.isArray(inc)) throw 0;
+      inc.forEach(function (p) {
+        if (!p || !p.name || !validLL(+p.lat, +p.lon)) return;
+        var i = cur.findIndex(function (x) { return x.name.toLowerCase() === p.name.toLowerCase(); });
+        var rec = { name: String(p.name), addr: String(p.addr || ''), note: String(p.note || ''), lat: +p.lat, lon: +p.lon, ts: +p.ts || Date.now() };
+        if (i >= 0) cur[i] = rec; else cur.push(rec);
+      });
+      setP(cur); toast('Geïmporteerd');
+    }).catch(function () { toast('Ongeldig bestand'); });
+    this.value = '';
+  };
+  renderP(); update();
+})();
+</script>
+</body>
+</html>

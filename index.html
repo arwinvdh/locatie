@@ -38,6 +38,18 @@ h1 { margin: 0; font-size: 1.125rem; font-weight: 600; }
 .brand .in { max-width: 64rem; margin-inline: auto; display: flex; align-items: center; gap: .6rem; }
 .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand-green); flex: none; }
 .brand h1 { color: #fff; letter-spacing: .01em; }
+.gear { margin-left: auto; width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #fff; cursor: pointer; transition: background-color .15s; }
+.gear:hover { background: rgba(255,255,255,.14); }
+.more-sum { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--accent); font-size: .875rem; font-weight: 600; }
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+.more-sum::after { content: "\25BE"; margin-left: .35rem; transition: transform .2s; }
+details[open] > .more-sum::after { transform: rotate(180deg); }
+.more-in { display: grid; gap: .6rem; padding-top: .4rem; animation: rise .25s ease both; }
+@media (max-width: 40rem) { #q { flex: 1 1 100%; } #paste, #go, #me { flex: 1; } }
+dialog { border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem; width: min(24rem, calc(100vw - 32px)); background: var(--surface); color: var(--ink); box-shadow: 0 12px 40px rgba(0,31,56,.3); }
+dialog[open] { display: grid; gap: .7rem; animation: rise .2s ease both; }
+dialog::backdrop { background: rgba(0,31,56,.5); }
 .wrap { padding-top: 1.1rem; }
 .card h2 { min-height: 32px; margin: 0; display: flex; align-items: center; }
 h2 { margin: 0 0 .5rem; font-size: .8125rem; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
@@ -82,7 +94,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 .nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
 .vtitle { font-size: 1.25rem; font-weight: 600; margin: 0; }
 .bar { position: fixed; inset: auto 0 0; padding: .6rem max(16px, env(safe-area-inset-right)) calc(.6rem + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: var(--bg); border-top: 1px solid var(--line); z-index: 500; }
-.bar .in { max-width: 64rem; margin-inline: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .4rem; }
+.bar .in { max-width: 64rem; margin-inline: auto; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: .4rem; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes drop { 0% { transform: translateY(-40px) rotate(-45deg); opacity: 0; } 60% { transform: translateY(4px) rotate(-45deg); opacity: 1; } 100% { transform: rotate(-45deg); } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -114,7 +126,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 </style>
 </head>
 <body>
-<header class="brand"><div class="in"><span class="dot"></span><h1>Locatie delen</h1></div></header>
+<header class="brand"><div class="in"><span class="dot"></span><h1>Locatie delen</h1><button class="gear" id="gear" aria-label="Mijn gegevens" title="Mijn gegevens"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></div></header>
 <div class="wrap" id="app">
 
 <!-- Ontvanger-weergave -->
@@ -137,7 +149,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   <div class="grid">
     <div style="display:grid;gap:1rem">
       <div class="card">
-        <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">1 &middot; Locatie</h2><button class="btn sm" id="new">Nieuw</button></div>
+        <div class="row" style="justify-content:space-between;align-items:center"><h2>1 &middot; Locatie</h2><button class="btn sm" id="new">Nieuw</button></div>
         <div class="chips" id="chips" hidden></div>
         <div class="row">
           <input class="inp grow" id="q" placeholder="Maps-link, coördinaten of adres" autocomplete="off" enterkeyhint="search">
@@ -153,20 +165,23 @@ textarea.inp { resize: vertical; min-height: 64px; }
           <span class="hint" id="coords"></span>
         </div>
       </div>
-      <div class="card">
-        <h2>2 &middot; Details</h2>
+      <div class="card" id="card-project">
+        <h2>2 &middot; Project</h2>
         <div class="row">
-          <div class="field" style="width:7.5rem"><label for="nr">Projectnr.</label><input class="inp" id="nr" placeholder="24-017" autocomplete="off" autocapitalize="characters"></div>
-          <div class="field grow"><label for="name">Projectnaam</label><input class="inp" id="name" placeholder="Bijv. Nieuwbouw Zuidpoort" autocomplete="off"></div>
+          <div class="field" style="width:7.5rem"><label for="nr">Projectnr.</label><input class="inp" id="nr" list="dl-nr" placeholder="24-017" autocomplete="off" autocapitalize="characters"></div>
+          <div class="field grow"><label for="name">Projectnaam</label><input class="inp" id="name" list="dl-name" placeholder="Bijv. Nieuwbouw Zuidpoort" autocomplete="off"></div>
         </div>
         <div class="field"><label for="addr">Adres</label><input class="inp" id="addr" autocomplete="off"></div>
-        <div class="field"><label for="plabel">Wat is deze pin? (optioneel)</label>
-          <select class="inp" id="plabel"><option value="">Geen label</option><option>Projectlocatie</option><option>Toegang werkterrein</option><option>Meldpunt</option><option>Laad- en losplaats</option><option>Parkeren</option></select></div>
-        <div class="field"><label for="note">Notitie</label><textarea class="inp" id="note" placeholder="Bijv. ingang via de achterpoort, bel bij aankomst"></textarea></div>
-        <details id="extra"><summary class="hint" style="cursor:pointer">Aanrijden en melden (optioneel)</summary>
-          <div class="field" style="margin-top:.5rem"><label for="via">Aanrijden via</label><input class="inp" id="via" placeholder="Bijv. Oudelandselaan, afslag Westersingel" autocomplete="off"></div>
-          <div class="field" style="margin-top:.5rem"><label for="arrive">Bij aankomst</label><input class="inp" id="arrive" placeholder="Bijv. bel uitvoerder, meld bij de keet" autocomplete="off"></div>
+        <details id="more"><summary class="more-sum">Meer opties</summary>
+          <div class="more-in">
+            <div class="field"><label for="plabel">Wat is deze pin?</label>
+              <select class="inp" id="plabel"><option value="">Geen label</option><option>Projectlocatie</option><option>Toegang werkterrein</option><option>Meldpunt</option><option>Laad- en losplaats</option><option>Parkeren</option></select></div>
+            <div class="field"><label for="note">Notitie</label><textarea class="inp" id="note" placeholder="Bijv. ingang via de achterpoort"></textarea></div>
+            <div class="field"><label for="via">Aanrijden via</label><input class="inp" id="via" placeholder="Bijv. Oudelandselaan, afslag Westersingel" autocomplete="off"></div>
+            <div class="field"><label for="arrive">Bij aankomst</label><input class="inp" id="arrive" placeholder="Bijv. bel uitvoerder, meld bij de keet" autocomplete="off"></div>
+          </div>
         </details>
+        <datalist id="dl-nr"></datalist><datalist id="dl-name"></datalist>
       </div>
     </div>
 
@@ -177,24 +192,19 @@ textarea.inp { resize: vertical; min-height: 64px; }
           <label class="check"><input type="checkbox" id="useWho"> Uitvoerder</label>
           <label class="check"><input type="checkbox" id="usePhone"> Telefoonnummer</label>
         </div>
-        <details id="mine"><summary class="hint" style="cursor:pointer">Mijn gegevens</summary>
-          <div class="row" style="margin-top:.5rem">
-            <div class="field grow"><label for="myName">Naam uitvoerder</label><input class="inp" id="myName" autocomplete="name"></div>
-            <div class="field grow"><label for="myPhone">Telefoon</label><input class="inp" id="myPhone" type="tel" autocomplete="tel"></div>
-          </div>
-          <p class="hint">Blijft alleen op dit apparaat staan.</p>
-        </details>
         <div class="wa"><div class="wa-b" id="preview"></div></div>
-        <div class="row">
-          <div class="seg" id="range"><button data-r="150" aria-pressed="false">Dichtbij</button><button data-r="400" aria-pressed="true">Midden</button><button data-r="1200" aria-pressed="false">Ruim</button></div>
-          <span class="hint" style="align-self:center">bereik afbeelding</span>
-        </div>
-        <div class="opts">
-          <label class="check"><input type="checkbox" id="optLabels"> Straatnamen</label>
-          <label class="check"><input type="checkbox" id="optParcel"> Perceelgrenzen</label>
-          <label class="check"><input type="checkbox" id="optMini"> Regiokaart</label>
-        </div>
-        <button class="btn" id="saveP">Opslaan als project</button>
+        <details id="imgopts"><summary class="more-sum">Afbeelding aanpassen</summary>
+          <div class="more-in">
+            <div class="row"><div class="seg" id="range"><button data-r="150" aria-pressed="false">Dichtbij</button><button data-r="400" aria-pressed="true">Midden</button><button data-r="1200" aria-pressed="false">Ruim</button></div>
+              <span class="hint" style="align-self:center">bereik</span></div>
+            <div class="opts">
+              <label class="check"><input type="checkbox" id="optLabels"> Straatnamen</label>
+              <label class="check"><input type="checkbox" id="optParcel"> Perceelgrenzen</label>
+              <label class="check"><input type="checkbox" id="optMini"> Regiokaart</label>
+            </div>
+          </div>
+        </details>
+        <p class="hint">Het project wordt vanzelf bewaard zodra je verstuurt.</p>
       </div>
       <div class="card">
         <h2>Projecten</h2>
@@ -211,10 +221,18 @@ textarea.inp { resize: vertical; min-height: 64px; }
   </div>
 
   <div class="bar"><div class="in">
-    <button class="btn primary" id="copy" disabled>Kopieer</button>
-    <button class="btn" id="wa" disabled>WhatsApp</button>
-    <button class="btn" id="img" disabled>Deel afbeelding</button>
+    <button class="btn primary" id="img" disabled title="Ctrl/Cmd + Enter">Deel afbeelding</button>
+    <button class="btn" id="wa" disabled>Tekst</button>
+    <button class="btn" id="copy" disabled title="Ctrl/Cmd + Shift + C">Kopieer</button>
   </div></div>
+
+  <dialog id="settings">
+    <h2>Mijn gegevens</h2>
+    <div class="field"><label for="myName">Naam uitvoerder</label><input class="inp" id="myName" autocomplete="name"></div>
+    <div class="field"><label for="myPhone">Telefoon</label><input class="inp" id="myPhone" type="tel" autocomplete="tel"></div>
+    <p class="hint">Eenmalig invullen. Blijft alleen op dit apparaat staan.</p>
+    <button class="btn primary" id="settingsOk">Klaar</button>
+  </dialog>
 </section>
 </div>
 <div class="toast" id="toast" hidden></div>
@@ -407,7 +425,17 @@ textarea.inp { resize: vertical; min-height: 64px; }
     }
     busy(true); geocode(q).then(function () { busy(false); });
   }
-  function focusName() { if (!$('name').value.trim() && !$('nr').value.trim()) $('nr').focus({ preventScroll: true }); }
+  function focusName() {
+    if ($('name').value.trim() || $('nr').value.trim()) return;
+    var el = $('nr'), r = el.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight - 110) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.focus({ preventScroll: true });
+  }
+  function openSettings(focusId) {
+    var d = $('settings');
+    if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute('open', '');
+    if (focusId) $(focusId).focus();
+  }
 
   /* ---------- bericht ---------- */
   function phoneFmt(t) {
@@ -415,6 +443,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     return /^06\d{8}$/.test(d) ? '06-' + d.slice(2) : String(t).trim();
   }
   var FIELDS = ['nr', 'name', 'addr', 'note', 'via', 'arrive', 'plabel'];
+  function openMore() { if (['note', 'via', 'arrive', 'plabel'].some(function (f) { return $(f).value; })) $('more').open = true; }
   function label() { return [$('nr').value.trim(), $('name').value.trim()].filter(Boolean).join(' \u00B7 '); }
   function addrLines(a) {
     var i = a.indexOf(',');
@@ -448,7 +477,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     saveDraft();
     var m = message(), has = state.lat != null;
     $('preview').innerHTML = has ? esc(m).replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\*([^*\n]+)\*/g, '<b>$1</b>') : '<span class="hint">Het bericht verschijnt hier zodra je een locatie hebt.</span>';
-    ['copy', 'wa', 'img', 'saveP'].forEach(function (id) { $(id).disabled = !has; });
+    ['copy', 'wa', 'img'].forEach(function (id) { $(id).disabled = !has; });
   }
 
   function copyText(t) {
@@ -673,7 +702,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
   function pl(p) { return [p.nr, p.name].filter(Boolean).join(' \u00B7 '); }
   function loadProject(p) {
-    FIELDS.forEach(function (f) { $(f).value = p[f] || ''; }); if ($('via').value || $('arrive').value) $('extra').open = true;
+    FIELDS.forEach(function (f) { $(f).value = p[f] || ''; }); openMore();
     setPoint(p.lat, p.lon, { addr: p.addr || '' }); window.scrollTo({ top: 0, behavior: 'smooth' }); setStatus('Project geladen.', 'ok');
   }
   function renderP() {
@@ -684,6 +713,11 @@ textarea.inp { resize: vertical; min-height: 64px; }
       var c = document.createElement('button'); c.className = 'chip'; c.textContent = pl(p); c.onclick = function () { loadProject(p); }; chips.appendChild(c);
     });
     chips.hidden = !all.length;
+    $('dl-nr').innerHTML = ''; $('dl-name').innerHTML = '';
+    all.forEach(function (p) {
+      if (p.nr) { var o = document.createElement('option'); o.value = p.nr; o.label = p.name || ''; $('dl-nr').appendChild(o); }
+      if (p.name) { var o2 = document.createElement('option'); o2.value = p.name; o2.label = p.nr || ''; $('dl-name').appendChild(o2); }
+    });
     var a = all.filter(function (p) { return !f || (pl(p) + ' ' + p.addr).toLowerCase().indexOf(f) >= 0; });
     box.innerHTML = '';
     if (!a.length) { box.innerHTML = '<p class="hint">Nog geen projecten opgeslagen.</p>'; return; }
@@ -748,6 +782,30 @@ textarea.inp { resize: vertical; min-height: 64px; }
       function () { setStatus('Geen toegang tot je locatie.', 'err'); }, { enableHighAccuracy: true, timeout: 10000 });
   };
   FIELDS.forEach(function (id) { $(id).addEventListener('input', update); $(id).addEventListener('change', update); });
+  // kiest iemand een bewaard project uit de suggesties, dan vullen we de rest in
+  function suggestPick(field) {
+    return function () {
+      var v = this.value.trim().toLowerCase(); if (!v) return;
+      var hit = getP().filter(function (p) { return String(p[field] || '').toLowerCase() === v; })[0];
+      if (!hit) return;
+      if (state.lat == null) { loadProject(hit); return; }
+      if (field === 'nr' && !$('name').value.trim()) $('name').value = hit.name || '';
+      if (field === 'name' && !$('nr').value.trim()) $('nr').value = hit.nr || '';
+      update();
+    };
+  }
+  $('nr').addEventListener('change', suggestPick('nr'));
+  $('name').addEventListener('change', suggestPick('name'));
+  // instellingen
+  $('gear').onclick = function () { openSettings(); };
+  $('settingsOk').onclick = function () { $('settings').close(); };
+  $('settings').addEventListener('click', function (e) { if (e.target === this) this.close(); });
+  // sneltoetsen
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || $('editor').hidden) return;
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!$('img').disabled) shareImage(); }
+    else if (e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); if (!$('copy').disabled) $('copy').click(); }
+  });
   [['myName', 'locdelen.who'], ['myPhone', 'locdelen.phone']].forEach(function (x) {
     $(x[0]).value = lsGet(x[1], ''); $(x[0]).addEventListener('input', function () { lsSet(x[1], this.value.trim()); update(); });
   });
@@ -755,7 +813,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     $(x[0]).checked = lsGet(x[1], '1') === '1';
     $(x[0]).onchange = function () {
       lsSet(x[1], this.checked ? '1' : '0');
-      if (this.checked && !$(x[2]).value.trim()) { $('mine').open = true; $(x[2]).focus(); }
+      if (this.checked && !$(x[2]).value.trim()) openSettings(x[2]);
       update();
     };
   });
@@ -767,7 +825,6 @@ textarea.inp { resize: vertical; min-height: 64px; }
   $('copy').onclick = function () { copyText(message()).then(function () { afterSend('Gekopieerd'); }); };
   $('wa').onclick = function () { window.open('https://wa.me/?text=' + encodeURIComponent(message()), '_blank'); saveProject(true); };
   $('img').onclick = shareImage;
-  $('saveP').onclick = function () { saveProject(false); };
   $('new').onclick = resetAll;
   $('paste').onclick = function () {
     if (!navigator.clipboard || !navigator.clipboard.readText) { $('q').focus(); setStatus('Plakken kan hier niet automatisch. Houd het veld ingedrukt en kies Plak.', 'err'); return; }
@@ -798,7 +855,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   try {
     var dr = JSON.parse(lsGet(LS.draft, 'null'));
     if (dr && dr.lat != null && validLL(+dr.lat, +dr.lon)) {
-      FIELDS.forEach(function (f) { $(f).value = dr[f] || ''; }); if ($('via').value || $('arrive').value) $('extra').open = true;
+      FIELDS.forEach(function (f) { $(f).value = dr[f] || ''; }); openMore();
       setPoint(+dr.lat, +dr.lon, { addr: dr.addr || '', keepView: false });
       setStatus('Vorige locatie hersteld. Tik op Nieuw voor een lege start.');
     } else $('q').focus();

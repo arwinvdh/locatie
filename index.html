@@ -69,6 +69,32 @@ textarea.inp { resize: vertical; min-height: 64px; }
 .vtitle { font-size: 1.25rem; font-weight: 600; margin: 0; }
 .bar { position: fixed; inset: auto 0 0; padding: .6rem max(16px, env(safe-area-inset-right)) calc(.6rem + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: var(--bg); border-top: 1px solid var(--line); z-index: 500; }
 .bar .in { max-width: 64rem; margin-inline: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .4rem; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes drop { 0% { transform: translateY(-40px) rotate(-45deg); opacity: 0; } 60% { transform: translateY(4px) rotate(-45deg); opacity: 1; } 100% { transform: rotate(-45deg); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.card { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 14px rgba(0,0,0,.05); border-radius: 14px; animation: rise .35s ease both; }
+.card:nth-child(2) { animation-delay: .05s; }
+.btn, .seg button, .results button, .inp, .proj-main { transition: background-color .15s, border-color .15s, color .15s, transform .12s, box-shadow .15s, opacity .15s; }
+.btn:active:not(:disabled) { transform: scale(.97); }
+.inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); outline: none; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.results button { animation: rise .2s ease both; }
+.results button:hover { border-color: var(--accent); }
+.proj { animation: rise .25s ease both; }
+.proj-main:hover b { color: var(--accent); }
+.pin-new .pin { animation: drop .4s cubic-bezier(.3,1.4,.5,1); }
+.pin { transform-origin: 50% 100%; }
+#map { box-shadow: inset 0 0 0 1px var(--line); }
+.bar { background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.btn.busy { position: relative; color: transparent !important; pointer-events: none; }
+.btn.busy::after { content: ""; position: absolute; width: 18px; height: 18px; border: 2px solid var(--on-accent); border-right-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
+.toast { animation: rise .2s ease both; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.wa-b { transition: opacity .15s; }
+.chips { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: .15rem; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; min-height: 36px; padding: 0 .75rem; border: 1px solid var(--line); border-radius: 999px; background: var(--field); cursor: pointer; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip:hover { border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 .toast { position: fixed; left: 50%; bottom: 5.5rem; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: .5rem .9rem; border-radius: 8px; z-index: 900; font-size: .875rem; }
 </style>
 </head>
@@ -96,9 +122,11 @@ textarea.inp { resize: vertical; min-height: 64px; }
   <div class="grid">
     <div style="display:grid;gap:1rem">
       <div class="card">
-        <h2>1 &middot; Locatie</h2>
+        <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">1 &middot; Locatie</h2><button class="btn sm" id="new">Nieuw</button></div>
+        <div class="chips" id="chips" hidden></div>
         <div class="row">
           <input class="inp grow" id="q" placeholder="Maps-link, coördinaten of adres" autocomplete="off" enterkeyhint="search">
+          <button class="btn" id="paste" title="Plak uit klembord">Plak</button>
           <button class="btn primary" id="go">Zoek</button>
           <button class="btn" id="me" title="Mijn locatie">Hier</button>
         </div>
@@ -161,7 +189,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var LS = { projects: 'locdelen.projects', base: 'locdelen.base', range: 'locdelen.range', share: 'locdelen.share' };
+  var LS = { draft: 'locdelen.draft', projects: 'locdelen.projects', base: 'locdelen.base', range: 'locdelen.range', share: 'locdelen.share' };
   function lsGet(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
@@ -199,7 +227,12 @@ textarea.inp { resize: vertical; min-height: 64px; }
       marker = L.marker([lat, lon], { icon: pinIcon(), draggable: !!draggable }).addTo(map);
       if (draggable) marker.on('dragend', function () { var p = marker.getLatLng(); setPoint(p.lat, p.lng, { reverse: true, keepView: true }); });
     }
-    if (fly) map.setView([lat, lon], Math.max(map.getZoom(), 17));
+    if (fly) {
+      var z = Math.max(map.getZoom(), 17);
+      if (map._loaded && map.getZoom() >= 5 && !matchMedia('(prefers-reduced-motion: reduce)').matches) map.flyTo([lat, lon], z, { duration: .8 }); else map.setView([lat, lon], z);
+    }
+    var el = marker.getElement && marker.getElement();
+    if (el) { el.classList.remove('pin-new'); void el.offsetWidth; el.classList.add('pin-new'); }
   }
 
   /* ---------- locatie zetten ---------- */
@@ -269,7 +302,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
   function pick(it) {
     setPoint(+it.lat, +it.lon, { addr: shortAddr(it.display_name) });
-    setStatus('Locatie gezet. Sleep de pin om te verfijnen.', 'ok');
+    setStatus('Locatie gezet. Sleep de pin om te verfijnen.', 'ok'); focusName();
   }
   function shortAddr(s) { return s.split(',').slice(0, 4).join(',').trim(); }
 
@@ -285,19 +318,23 @@ textarea.inp { resize: vertical; min-height: 64px; }
       }).catch(function () {});
   }
 
+  function busy(on) { $('go').classList.toggle('busy', on); }
   function lookup() {
     var q = $('q').value.trim();
     if (!q) return;
     var c = parseCoords(q);
-    if (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Coördinaten herkend. Sleep de pin om te verfijnen.', 'ok'); return; }
+    if (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Coördinaten herkend. Sleep de pin om te verfijnen.', 'ok'); focusName(); return; }
     if (/^https?:\/\//i.test(q)) {
       setStatus('Korte link uitzoeken...');
-      resolveShort(q).then(function (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Link herkend.', 'ok'); })
+      busy(true);
+      resolveShort(q).then(function (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Link herkend.', 'ok'); focusName(); })
+        .finally(function () { busy(false); })
         .catch(function () { setStatus('Deze link kan ik niet openen. Open hem in Maps, kopieer de coördinaten of typ het adres.', 'err'); });
       return;
     }
-    geocode(q);
+    busy(true); geocode(q).then(function () { busy(false); });
   }
+  function focusName() { if (!$('name').value.trim()) $('name').focus({ preventScroll: true }); }
 
   /* ---------- bericht ---------- */
   function shareUrl() {
@@ -312,15 +349,19 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function message() {
     if (state.lat == null) return '';
     var name = $('name').value.trim(), addr = $('addr').value.trim(), note = $('note').value.trim(), out = [];
-    if (name) out.push('*' + name + '*');
-    if (addr) out.push(addr);
-    if (note) out.push(note);
+    if (name) out.push('\uD83D\uDCCD *' + name + '*');
+    if (addr) out.push('\uD83C\uDFE0 ' + addr);
+    if (note) out.push('\uD83D\uDCDD ' + note);
     out.push('');
-    out.push(googleUrl(state.lat, state.lon));
-    if ($('inclShare').checked) { var s = shareUrl(); if (s) { out.push(''); out.push('Satelliet en navigatie: ' + s); } }
+    out.push('\uD83D\uDDFA\uFE0F ' + googleUrl(state.lat, state.lon));
+    if ($('inclShare').checked) { var s = shareUrl(); if (s) { out.push(''); out.push('\uD83D\uDEF0\uFE0F Satelliet en navigatie: ' + s); } }
     return out.join('\n').replace(/^\n+/, '');
   }
+  function saveDraft() {
+    lsSet(LS.draft, JSON.stringify({ lat: state.lat, lon: state.lon, name: $('name').value, addr: $('addr').value, note: $('note').value }));
+  }
   function update() {
+    saveDraft();
     var m = message(), has = state.lat != null;
     $('preview').innerHTML = has ? esc(m).replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\*([^*\n]+)\*/g, '<b>$1</b>') : '<span class="hint">Het bericht verschijnt hier zodra je een locatie hebt.</span>';
     ['copy', 'wa', 'img', 'saveP'].forEach(function (id) { $(id).disabled = !has; });
@@ -372,7 +413,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     var msg = message();
     buildImage().then(function (blob) {
       var f = new File([blob], ((($('name').value.trim() || 'locatie')).replace(/[^\w\-]+/g, '_')) + '.jpg', { type: 'image/jpeg' });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) return navigator.share({ files: [f], text: msg }).catch(function (e) { if (e && e.name !== 'AbortError') throw e; });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) return navigator.share({ files: [f], text: msg }).then(function () { saveProject(true); }).catch(function (e) { if (e && e.name !== 'AbortError') throw e; });
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = f.name; a.click();
       copyText(msg); toast('Afbeelding opgeslagen, bericht gekopieerd');
     }).catch(function () { toast('Afbeelding maken mislukt'); })
@@ -382,32 +423,50 @@ textarea.inp { resize: vertical; min-height: 64px; }
   /* ---------- projecten ---------- */
   function getP() { try { return JSON.parse(lsGet(LS.projects, '[]')) || []; } catch (e) { return []; } }
   function setP(a) { lsSet(LS.projects, JSON.stringify(a)); renderP(); }
-  function saveProject() {
-    if (state.lat == null) return;
+  function saveProject(silent) {
+    if (state.lat == null) return false;
     var name = $('name').value.trim();
-    if (!name) { toast('Geef eerst een projectnaam'); $('name').focus(); return; }
+    if (!name) { if (!silent) { toast('Geef eerst een projectnaam'); $('name').focus(); } return false; }
     var a = getP(), rec = { name: name, addr: $('addr').value.trim(), note: $('note').value.trim(), lat: state.lat, lon: state.lon, ts: Date.now() };
     var i = a.findIndex(function (p) { return p.name.toLowerCase() === name.toLowerCase(); });
-    if (i >= 0) a[i] = rec; else a.unshift(rec);
-    setP(a); toast(i >= 0 ? 'Project bijgewerkt' : 'Project opgeslagen');
+    if (i >= 0) a.splice(i, 1);
+    a.unshift(rec);
+    setP(a);
+    if (!silent) toast(i >= 0 ? 'Project bijgewerkt' : 'Project opgeslagen');
+    return true;
+  }
+  function loadProject(p) {
+    $('name').value = p.name; $('addr').value = p.addr || ''; $('note').value = p.note || '';
+    setPoint(p.lat, p.lon, { addr: p.addr || '' }); window.scrollTo({ top: 0, behavior: 'smooth' }); setStatus('Project geladen.', 'ok');
   }
   function renderP() {
-    var a = getP(), f = $('filter').value.trim().toLowerCase(), box = $('plist');
-    $('filter').hidden = a.length < 6;
-    a = a.filter(function (p) { return !f || (p.name + ' ' + p.addr).toLowerCase().indexOf(f) >= 0; });
+    var all = getP(), f = $('filter').value.trim().toLowerCase(), box = $('plist');
+    $('filter').hidden = all.length < 6;
+    var chips = $('chips'); chips.innerHTML = '';
+    all.slice(0, 6).forEach(function (p) {
+      var c = document.createElement('button'); c.className = 'chip'; c.textContent = p.name; c.onclick = function () { loadProject(p); }; chips.appendChild(c);
+    });
+    chips.hidden = !all.length;
+    var a = all.filter(function (p) { return !f || (p.name + ' ' + p.addr).toLowerCase().indexOf(f) >= 0; });
     box.innerHTML = '';
     if (!a.length) { box.innerHTML = '<p class="hint">Nog geen projecten opgeslagen.</p>'; return; }
     a.forEach(function (p) {
       var d = document.createElement('div'); d.className = 'proj';
       d.innerHTML = '<button class="proj-main"><b>' + esc(p.name) + '</b><span>' + esc(p.addr || (fmt(p.lat) + ', ' + fmt(p.lon))) + '</span></button><button class="btn sm danger" aria-label="Verwijder ' + esc(p.name) + '">&times;</button>';
-      d.children[0].onclick = function () {
-        $('name').value = p.name; $('addr').value = p.addr || ''; $('note').value = p.note || '';
-        setPoint(p.lat, p.lon, { addr: p.addr || '' }); window.scrollTo({ top: 0, behavior: 'smooth' }); setStatus('Project geladen.', 'ok');
-      };
+      d.children[0].onclick = function () { loadProject(p); };
       d.children[1].onclick = function () { if (confirm('"' + p.name + '" verwijderen?')) setP(getP().filter(function (x) { return x.ts !== p.ts || x.name !== p.name; })); };
       box.appendChild(d);
     });
   }
+  function resetAll() {
+    state.lat = state.lon = null;
+    ['q', 'name', 'addr', 'note'].forEach(function (id) { $(id).value = ''; });
+    if (marker) { map.removeLayer(marker); marker = null; }
+    $('coords').textContent = ''; $('results').innerHTML = '';
+    setStatus('Plak een Google Maps-link, coördinaten (52.0907, 5.1214) of typ een adres. Of tik op de kaart.');
+    update(); $('q').focus();
+  }
+  function afterSend(msg) { var saved = saveProject(true); toast(msg + (saved ? ' en opgeslagen' : '')); }
 
   /* ---------- viewer ---------- */
   function startViewer(q) {
@@ -454,10 +513,15 @@ textarea.inp { resize: vertical; min-height: 64px; }
     [].forEach.call($('range').children, function (b) { b.setAttribute('aria-pressed', b.dataset.r === r ? 'true' : 'false'); });
   };
   [].forEach.call($('range').children, function (b) { b.setAttribute('aria-pressed', +b.dataset.r === state.range ? 'true' : 'false'); });
-  $('copy').onclick = function () { copyText(message()).then(function () { toast('Gekopieerd'); }); };
-  $('wa').onclick = function () { window.open('https://wa.me/?text=' + encodeURIComponent(message()), '_blank'); };
+  $('copy').onclick = function () { copyText(message()).then(function () { afterSend('Gekopieerd'); }); };
+  $('wa').onclick = function () { window.open('https://wa.me/?text=' + encodeURIComponent(message()), '_blank'); saveProject(true); };
   $('img').onclick = shareImage;
-  $('saveP').onclick = saveProject;
+  $('saveP').onclick = function () { saveProject(false); };
+  $('new').onclick = resetAll;
+  $('paste').onclick = function () {
+    if (!navigator.clipboard || !navigator.clipboard.readText) { $('q').focus(); setStatus('Plakken kan hier niet automatisch. Houd het veld ingedrukt en kies Plak.', 'err'); return; }
+    navigator.clipboard.readText().then(function (t) { if (t) { $('q').value = t.trim(); lookup(); } }).catch(function () { $('q').focus(); setStatus('Geen toegang tot het klembord. Plak handmatig in het veld.', 'err'); });
+  };
   $('filter').oninput = renderP;
   $('exp').onclick = function () {
     var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(getP(), null, 2)], { type: 'application/json' }));
@@ -479,6 +543,14 @@ textarea.inp { resize: vertical; min-height: 64px; }
     }).catch(function () { toast('Ongeldig bestand'); });
     this.value = '';
   };
+  try {
+    var dr = JSON.parse(lsGet(LS.draft, 'null'));
+    if (dr && dr.lat != null && validLL(+dr.lat, +dr.lon)) {
+      $('name').value = dr.name || ''; $('addr').value = dr.addr || ''; $('note').value = dr.note || '';
+      setPoint(+dr.lat, +dr.lon, { addr: dr.addr || '', keepView: false });
+      setStatus('Vorige locatie hersteld. Tik op Nieuw voor een lege start.');
+    } else $('q').focus();
+  } catch (e) {}
   renderP(); update();
 })();
 </script>

@@ -244,7 +244,6 @@ textarea.inp { resize: vertical; min-height: 64px; }
     esri: { tpl: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', max: 19, credit: 'Esri' },
     osm: { tpl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max: 19, credit: '\u00A9 OpenStreetMap' },
     labels: { tpl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', max: 19, credit: 'Esri' },
-    gemeente: { wms: 'https://service.pdok.nl/kadaster/bestuurlijkegebieden/wms/v1_0', layers: 'Gemeentegebied', credit: 'Kadaster' },
     parcel: { wms: 'https://service.pdok.nl/kadaster/kadastralekaart/wms/v5_0', layers: 'Perceel', credit: 'Kadaster' }
   };
   var cache = {}, active = {};
@@ -474,27 +473,60 @@ textarea.inp { resize: vertical; min-height: 64px; }
       .then(function (j) { var d = j.response && j.response.docs && j.response.docs[0]; return d ? String(d.weergavenaam || '').replace(/^Gemeente\s+/i, '') : ''; })
       .catch(function () { return ''; });
   }
+  function gemeenteGeo(lat, lon) {
+    var d = 0.0004;
+    var u = 'https://service.pdok.nl/kadaster/bestuurlijkegebieden/wfs/v1_0?service=WFS&version=2.0.0&request=GetFeature&typeName=bestuurlijkegebieden:Gemeentegebied&outputFormat=application%2Fjson&srsName=EPSG:4326&count=1&bbox=' +
+      [lat - d, lon - d, lat + d, lon + d].join(',') + ',urn:ogc:def:crs:EPSG::4326';
+    return timeoutFetch(u, 7000).then(function (r) { return r.json(); }).then(function (j) {
+      var f = j.features && j.features[0], g = f && f.geometry; if (!g) return null;
+      var polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : null; if (!polys) return null;
+      var rings = []; polys.forEach(function (pl) { pl.forEach(function (rg) { rings.push(rg); }); });
+      var first = rings[0] && rings[0][0]; if (!first) return null;
+      var swap = first[0] > 40 && first[0] < 60 && first[1] < 20;           // lat,lon i.p.v. lon,lat
+      rings = rings.map(function (rg) { return rg.map(function (q) { return swap ? [q[1], q[0]] : [q[0], q[1]]; }); });
+      var mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
+      rings.forEach(function (rg) { rg.forEach(function (q) { mnx = Math.min(mnx, q[0]); mxx = Math.max(mxx, q[0]); mny = Math.min(mny, q[1]); mxy = Math.max(mxy, q[1]); }); });
+      return { rings: rings, bbox: [mnx, mny, mxx, mxy], name: f.properties && (f.properties.naam || f.properties.gemeentenaam) || '' };
+    }).catch(function () { return null; });
+  }
+  function worldPx(lat, lon, zf) {
+    var sc = 256 * Math.pow(2, zf), sl = Math.sin(lat * Math.PI / 180);
+    return [(lon + 180) / 360 * sc, (0.5 - Math.log((1 + sl) / (1 - sl)) / (4 * Math.PI)) * sc];
+  }
   function regionPart(lat, lon) {
-    var S = 330, rng = 14000, nl = inNL(lat, lon);
-    var c = { W: S, H: S, lat: lat, lon: lon, zf: Math.log(156543.03392 * Math.cos(lat * Math.PI / 180) / (rng / S)) / Math.LN2 };
-    var bk = nl ? 'brt' : 'osm';
-    return Promise.all([
-      loadLayer(bk, c).then(function (b) { return !b.ok && SRC[bk].fb ? loadLayer(SRC[bk].fb, c) : b; }),
-      nl ? loadLayer('gemeente', c) : Promise.resolve(null),
-      nl ? gemeenteNaam(lat, lon) : Promise.resolve('')
-    ]).then(function (r) {
-      if (!r[0].ok) return null;
-      return { S: S, base: r[0], gem: r[1] && r[1].ok ? r[1] : null, name: r[2] };
+    var S = 330, nl = inNL(lat, lon);
+    return (nl ? Promise.all([gemeenteGeo(lat, lon), gemeenteNaam(lat, lon)]) : Promise.resolve([null, ''])).then(function (r) {
+      var geo = r[0], name = (geo && geo.name) || r[1], clat = lat, clon = lon, rng = 25000;
+      if (geo) {
+        var b = geo.bbox; clat = (b[1] + b[3]) / 2; clon = (b[0] + b[2]) / 2;
+        var wm = (b[2] - b[0]) * 111320 * Math.cos(clat * Math.PI / 180), hm = (b[3] - b[1]) * 110540;
+        rng = Math.max(6000, Math.min(60000, Math.max(wm, hm) * 1.2));
+      }
+      var zf = Math.log(156543.03392 * Math.cos(clat * Math.PI / 180) / (rng / S)) / Math.LN2;
+      var c = { W: S, H: S, lat: clat, lon: clon, zf: zf }, bk = nl ? 'brt' : 'osm';
+      return loadLayer(bk, c).then(function (b) { return !b.ok && SRC[bk].fb ? loadLayer(SRC[bk].fb, c) : b; }).then(function (base) {
+        if (!base.ok) return null;
+        var cp = worldPx(clat, clon, zf), pp = worldPx(lat, lon, zf);
+        var ringsPx = geo ? geo.rings.map(function (rg) { return rg.map(function (q) { var w = worldPx(q[1], q[0], zf); return [S / 2 + w[0] - cp[0], S / 2 + w[1] - cp[1]]; }); }) : null;
+        return { S: S, base: base, rings: ringsPx, dot: [S / 2 + pp[0] - cp[0], S / 2 + pp[1] - cp[1]], name: name };
+      });
     });
   }
   function drawRegion(g, R, x0, y0) {
     var S = R.S, rad = 18;
     g.save(); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 14; g.shadowOffsetY = 4; g.fillStyle = '#fff'; rrect(g, x0 - 5, y0 - 5, S + 10, S + 10, rad + 4); g.fill(); g.restore();
     g.save(); rrect(g, x0, y0, S, S, rad); g.clip(); g.translate(x0, y0);
-    R.base.draw(g); if (R.gem) R.gem.draw(g);
-    var d = S / 2;
-    g.fillStyle = 'rgba(229,50,45,.28)'; g.beginPath(); g.arc(d, d, 24, 0, 7); g.fill();
-    g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.arc(d, d, 10, 0, 7); g.fill(); g.stroke();
+    R.base.draw(g);
+    if (R.rings) {
+      g.beginPath(); g.rect(-5, -5, S + 10, S + 10);
+      R.rings.forEach(function (rg) { rg.forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); });
+      g.fillStyle = 'rgba(255,255,255,.5)'; g.fill('evenodd');
+      g.beginPath(); R.rings.forEach(function (rg) { rg.forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); });
+      g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 7; g.stroke(); g.strokeStyle = '#014983'; g.lineWidth = 3.5; g.stroke();
+    }
+    var d = R.dot;
+    g.fillStyle = 'rgba(229,50,45,.28)'; g.beginPath(); g.arc(d[0], d[1], 24, 0, 7); g.fill();
+    g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.arc(d[0], d[1], 10, 0, 7); g.fill(); g.stroke();
     if (R.name) {
       g.fillStyle = 'rgba(0,31,56,.88)'; g.fillRect(0, S - 44, S, 44);
       g.fillStyle = '#fff'; g.textAlign = 'left'; g.font = '600 22px system-ui, sans-serif'; g.fillText(clip(g, R.name, S - 24), 12, S - 14);
@@ -503,7 +535,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
 
   function buildImage() {
-    var W = 1080, H = 1350, lat = state.lat, lon = state.lon, o = state.opts;
+    var W = 1080, H = 1440, lat = state.lat, lon = state.lon, o = state.opts;
     var mpp = state.range / W;
     var c = { W: W, H: H, lat: lat, lon: lon, zf: Math.log(156543.03392 * Math.cos(lat * Math.PI / 180) / mpp) / Math.LN2 };
     var bk = baseKey();
@@ -528,30 +560,29 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x - 46, y - 44, x - 40, y - 100, x, y - 100); g.bezierCurveTo(x + 40, y - 100, x + 46, y - 44, x, y); g.closePath(); g.fill(); g.stroke();
       g.restore(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y - 66, 13, 0, 7); g.fill();
       // regiokaart linksboven, noordpijl rechtsboven
-      if (region) { drawRegion(g, region, 28, 28); [region.base, region.gem].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); }
+      if (region) { drawRegion(g, region, 28, 28); [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); }
       var nx = W - 64, ny = 64;
       g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.arc(nx, ny, 40, 0, 7); g.fill();
       g.fillStyle = '#111'; g.beginPath(); g.moveTo(nx, ny - 26); g.lineTo(nx + 11, ny + 8); g.lineTo(nx, ny + 2); g.lineTo(nx - 11, ny + 8); g.closePath(); g.fill();
       g.font = '700 20px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('N', nx, ny + 30);
       // onderbalk
-      var BH = 190, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();
+      var BH = 250, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();
       var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? $('myPhone').value.trim() : '';
       g.fillStyle = 'rgba(0,31,56,.96)'; g.fillRect(0, H - BH, W, BH);
       g.fillStyle = '#76b720'; g.fillRect(0, H - BH, 10, BH);
-      // rechterkolom: datum en contact
-      var rt = [], by = H - BH + 42;
-      if (o.date) rt.push({ t: 'Status ' + new Date().toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }), f: '20px system-ui, sans-serif', c: 'rgba(255,255,255,.6)', dy: 0 });
-      if (who) { rt.push({ t: 'UITVOERDER', f: '600 15px system-ui, sans-serif', c: '#8fd000', dy: 40 }); rt.push({ t: who, f: '600 26px system-ui, sans-serif', c: '#fff', dy: 30 }); }
-      if (tel) rt.push({ t: tel, f: '26px system-ui, sans-serif', c: '#fff', dy: who ? 32 : 44 });
+      var rt = [], by = H - BH + 46;
+      if (o.date) rt.push({ t: 'Status ' + new Date().toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }), f: '24px system-ui, sans-serif', c: 'rgba(255,255,255,.65)', dy: 0 });
+      if (who) { rt.push({ t: 'UITVOERDER', f: '600 17px system-ui, sans-serif', c: '#8fd000', dy: 58 }); rt.push({ t: who, f: '600 32px system-ui, sans-serif', c: '#fff', dy: 38 }); }
+      if (tel) rt.push({ t: tel, f: '32px system-ui, sans-serif', c: '#fff', dy: who ? 42 : 60 });
       var rw = 0; rt.forEach(function (r) { g.font = r.f; rw = Math.max(rw, g.measureText(r.t).width); });
       g.textAlign = 'right'; g.textBaseline = 'alphabetic';
       rt.forEach(function (r) { by += r.dy; g.font = r.f; g.fillStyle = r.c; g.fillText(r.t, W - 30, by); });
-      var lw = rt.length ? W - 36 - rw - 60 : W - 60;
+      var lw = rt.length ? W - 36 - rw - 50 : W - 60;
       g.textAlign = 'left'; var ty = H - BH + 52;
-      if (nr) { g.font = '600 26px system-ui, sans-serif'; g.fillStyle = '#8fd000'; g.fillText(clip(g, nr, lw), 36, ty); ty += 50; } else ty += 14;
-      g.font = '700 46px system-ui, sans-serif'; g.fillStyle = '#fff'; g.fillText(clip(g, nm || (nr ? '' : 'Locatie'), lw), 36, ty);
-      g.font = '28px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.85)';
-      g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), lw), 36, H - 34);
+      if (nr) { g.font = '600 30px system-ui, sans-serif'; g.fillStyle = '#8fd000'; g.fillText(clip(g, nr, lw), 36, ty); ty += 58; } else ty += 12;
+      g.font = '700 56px system-ui, sans-serif'; g.fillStyle = '#fff'; if (nm || !nr) { g.fillText(clip(g, nm || 'Locatie', lw), 36, ty); ty += 50; }
+      g.font = '30px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.88)';
+      wrap(g, addr || (fmt(lat) + ', ' + fmt(lon)), lw, 2).forEach(function (ln) { g.fillText(ln, 36, ty); ty += 38; });
       g.font = '14px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.5)'; g.textAlign = 'right';
       g.fillText(credits.join(' \u00B7 '), W - 14, H - 8);
       // witte rand met schaduw rond de kaart
@@ -563,6 +594,16 @@ textarea.inp { resize: vertical; min-height: 64px; }
       o2.save(); rrect(o2, M, M, W, H, R); o2.clip(); o2.drawImage(cv, M, M); o2.restore();
       return new Promise(function (res, rej) { out.toBlob(function (bl) { bl ? res(bl) : rej(new Error('export')); }, 'image/jpeg', .92); });
     });
+  }
+  function wrap(g, t, w, max) {
+    var words = t.split(/\s+/), lines = [], cur = '';
+    words.forEach(function (wd) {
+      var tr = cur ? cur + ' ' + wd : wd;
+      if (g.measureText(tr).width > w && cur) { lines.push(cur); cur = wd; } else cur = tr;
+    });
+    if (cur) lines.push(cur);
+    if (lines.length > max) { lines = lines.slice(0, max); lines[max - 1] = clip(g, lines[max - 1] + '\u2026', w); }
+    return lines.map(function (l) { return clip(g, l, w); });
   }
   function rrect(g, x, y, w, h, r) {
     g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();

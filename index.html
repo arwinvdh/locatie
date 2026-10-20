@@ -525,11 +525,12 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 7; g.stroke(); g.strokeStyle = '#014983'; g.lineWidth = 3.5; g.stroke();
     }
     var d = R.dot;
-    g.fillStyle = 'rgba(229,50,45,.28)'; g.beginPath(); g.arc(d[0], d[1], 24, 0, 7); g.fill();
-    g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.arc(d[0], d[1], 10, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(229,50,45,.28)'; g.beginPath(); g.arc(d[0], d[1], 26, 0, 7); g.fill();
+    g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 4.5; g.beginPath(); g.arc(d[0], d[1], 11, 0, 7); g.fill(); g.stroke();
     if (R.name) {
-      g.fillStyle = 'rgba(0,31,56,.88)'; g.fillRect(0, S - 44, S, 44);
-      g.fillStyle = '#fff'; g.textAlign = 'left'; g.font = '600 22px system-ui, sans-serif'; g.fillText(clip(g, R.name, S - 24), 12, S - 14);
+      g.font = '600 22px system-ui, sans-serif'; var nm = clip(g, R.name, S - 40), tw = g.measureText(nm).width + 24;
+      g.fillStyle = 'rgba(0,31,56,.9)'; rrect(g, 10, 10, tw, 36, 10); g.fill();
+      g.fillStyle = '#fff'; g.textAlign = 'left'; g.fillText(nm, 22, 35);
     }
     g.restore();
   }

@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Locatie delen</title>
+<meta name="theme-color" content="#1F3A5F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Locatie">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 :root {
@@ -414,17 +422,36 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.save(); g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 10; g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 5;
       g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x - 46, y - 44, x - 40, y - 100, x, y - 100); g.bezierCurveTo(x + 40, y - 100, x + 46, y - 44, x, y); g.closePath(); g.fill(); g.stroke();
       g.restore(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y - 66, 13, 0, 7); g.fill();
+      // schaalbalk (linksonder boven de balk)
+      var steps = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000], maxM = W * 0.22 * mpp, m = steps[0];
+      steps.forEach(function (v) { if (v <= maxM) m = v; });
+      var bw = m / mpp, bx = 36, by = H - 170 - 40, lab = m >= 1000 ? (m / 1000) + ' km' : m + ' m';
+      g.font = '600 24px system-ui, sans-serif';
+      var cw = Math.max(bw, g.measureText(lab).width) + 32;
+      g.fillStyle = 'rgba(255,255,255,.88)'; rrect(g, bx - 16, by - 46, cw, 72, 10); g.fill();
+      g.strokeStyle = '#111'; g.lineWidth = 4; g.beginPath(); g.moveTo(bx, by - 8); g.lineTo(bx, by + 8); g.moveTo(bx, by); g.lineTo(bx + bw, by); g.moveTo(bx + bw, by - 8); g.lineTo(bx + bw, by + 8); g.stroke();
+      g.fillStyle = '#111'; g.textAlign = 'left'; g.fillText(lab, bx, by - 16);
+      // noordpijl (rechtsboven)
+      var nx = W - 64, ny = 64;
+      g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.arc(nx, ny, 40, 0, 7); g.fill();
+      g.fillStyle = '#111'; g.beginPath(); g.moveTo(nx, ny - 26); g.lineTo(nx + 11, ny + 8); g.lineTo(nx, ny + 2); g.lineTo(nx - 11, ny + 8); g.closePath(); g.fill();
+      g.font = '700 20px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('N', nx, ny + 30);
       // onderbalk
-      var title = label(), addr = $('addr').value.trim();
-      g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, H - 150, W, 150);
-      g.fillStyle = '#fff'; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
-      g.font = '600 46px system-ui, sans-serif'; g.fillText(clip(g, title || 'Locatie', W - 60), 30, H - 90);
-      g.font = '30px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.88)';
-      g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), W - 60), 30, H - 42);
-      g.font = '16px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.7)'; g.textAlign = 'right';
-      g.fillText(T.credit, W - 12, H - 10);
+      var BH = 170, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();
+      g.fillStyle = 'rgba(16,32,56,.94)'; g.fillRect(0, H - BH, W, BH);
+      g.fillStyle = '#E5322D'; g.fillRect(0, H - BH, 10, BH);
+      g.textAlign = 'left'; g.textBaseline = 'alphabetic'; var ty = H - BH + 44;
+      if (nr) { g.font = '600 26px system-ui, sans-serif'; g.fillStyle = '#9CC2FF'; g.fillText(clip(g, nr, W - 80), 36, ty); ty += 50; } else ty += 14;
+      g.font = '700 46px system-ui, sans-serif'; g.fillStyle = '#fff'; g.fillText(clip(g, nm || (nr ? '' : 'Locatie'), W - 80), 36, ty);
+      g.font = '28px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.85)';
+      g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), W - 80), 36, H - 28);
+      g.font = '15px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.55)'; g.textAlign = 'right';
+      g.fillText(T.credit, W - 14, H - 10);
       return new Promise(function (res, rej) { c.toBlob(function (b) { b ? res(b) : rej(new Error('export')); }, 'image/jpeg', .9); });
     });
+  }
+  function rrect(g, x, y, w, h, r) {
+    g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
   }
   function clip(g, t, w) { while (g.measureText(t).width > w && t.length > 1) t = t.slice(0, -2) + '…'; return t; }
 

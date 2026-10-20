@@ -140,7 +140,10 @@ textarea.inp { resize: vertical; min-height: 64px; }
       </div>
       <div class="card">
         <h2>2 &middot; Details</h2>
-        <div class="field"><label for="name">Projectnaam</label><input class="inp" id="name" placeholder="Bijv. Nieuwbouw Zuidpoort" autocomplete="off"></div>
+        <div class="row">
+          <div class="field" style="width:7.5rem"><label for="nr">Projectnr.</label><input class="inp" id="nr" placeholder="24-017" autocomplete="off" autocapitalize="characters"></div>
+          <div class="field grow"><label for="name">Projectnaam</label><input class="inp" id="name" placeholder="Bijv. Nieuwbouw Zuidpoort" autocomplete="off"></div>
+        </div>
         <div class="field"><label for="addr">Adres</label><input class="inp" id="addr" autocomplete="off"></div>
         <div class="field"><label for="note">Notitie</label><textarea class="inp" id="note" placeholder="Bijv. ingang via de achterpoort, bel bij aankomst"></textarea></div>
       </div>
@@ -149,8 +152,6 @@ textarea.inp { resize: vertical; min-height: 64px; }
     <div style="display:grid;gap:1rem" class="sticky">
       <div class="card">
         <h2>3 &middot; Versturen</h2>
-        <label class="check"><input type="checkbox" id="inclShare"> Deelpagina met satelliet meesturen</label>
-        <p class="hint" id="shareHint"></p>
         <div class="wa"><div class="wa-b" id="preview"></div></div>
         <div class="row">
           <div class="seg" id="range"><button data-r="150" aria-pressed="false">Dichtbij</button><button data-r="400" aria-pressed="true">Midden</button><button data-r="1200" aria-pressed="false">Ruim</button></div>
@@ -168,9 +169,6 @@ textarea.inp { resize: vertical; min-height: 64px; }
           <input type="file" id="impf" accept="application/json" hidden>
         </div>
         <p class="hint">Projecten staan alleen op dit apparaat. Exporteer om ze op een ander apparaat te zetten.</p>
-        <details><summary class="hint" style="cursor:pointer">Instellingen</summary>
-          <div class="field" style="margin-top:.5rem"><label for="base">Basis-URL van deze pagina (voor de deellink)</label><input class="inp" id="base" placeholder="https://jouwnaam.github.io/locatie-delen.html" autocomplete="off"></div>
-        </details>
       </div>
     </div>
   </div>
@@ -193,7 +191,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function lsGet(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
-  var state = { lat: null, lon: null, range: +lsGet(LS.range, 400) };
+  var state = { layer: 'sat', lat: null, lon: null, range: +lsGet(LS.range, 400) };
   var map, marker, layers = {};
 
   /* ---------- helpers ---------- */
@@ -214,6 +212,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     return map;
   }
   function setLayer(l) {
+    state.layer = l; lsSet('locdelen.layer', l);
     var other = l === 'sat' ? 'map' : 'sat';
     if (map.hasLayer(layers[other])) map.removeLayer(layers[other]);
     layers[l].addTo(map);
@@ -334,39 +333,28 @@ textarea.inp { resize: vertical; min-height: 64px; }
     }
     busy(true); geocode(q).then(function () { busy(false); });
   }
-  function focusName() { if (!$('name').value.trim()) $('name').focus({ preventScroll: true }); }
+  function focusName() { if (!$('name').value.trim() && !$('nr').value.trim()) $('nr').focus({ preventScroll: true }); }
 
   /* ---------- bericht ---------- */
-  function shareUrl() {
-    var base = $('base').value.trim();
-    if (!base) { if (/^https?:/.test(location.protocol)) base = location.origin + location.pathname; else return ''; }
-    var u = base + '?lat=' + fmt(state.lat) + '&lon=' + fmt(state.lon);
-    if ($('name').value.trim()) u += '&n=' + encodeURIComponent($('name').value.trim());
-    if ($('addr').value.trim()) u += '&a=' + encodeURIComponent($('addr').value.trim());
-    if ($('note').value.trim()) u += '&t=' + encodeURIComponent($('note').value.trim());
-    return u;
-  }
+  function label() { return [$('nr').value.trim(), $('name').value.trim()].filter(Boolean).join(' \u00B7 '); }
   function message() {
     if (state.lat == null) return '';
-    var name = $('name').value.trim(), addr = $('addr').value.trim(), note = $('note').value.trim(), out = [];
-    if (name) out.push('\uD83D\uDCCD *' + name + '*');
+    var title = label(), addr = $('addr').value.trim(), note = $('note').value.trim(), out = [];
+    if (title) out.push('\uD83D\uDCCD *' + title + '*');
     if (addr) out.push('\uD83C\uDFE0 ' + addr);
     if (note) out.push('\uD83D\uDCDD ' + note);
     out.push('');
     out.push('\uD83D\uDDFA\uFE0F ' + googleUrl(state.lat, state.lon));
-    if ($('inclShare').checked) { var s = shareUrl(); if (s) { out.push(''); out.push('\uD83D\uDEF0\uFE0F Satelliet en navigatie: ' + s); } }
     return out.join('\n').replace(/^\n+/, '');
   }
   function saveDraft() {
-    lsSet(LS.draft, JSON.stringify({ lat: state.lat, lon: state.lon, name: $('name').value, addr: $('addr').value, note: $('note').value }));
+    lsSet(LS.draft, JSON.stringify({ lat: state.lat, lon: state.lon, nr: $('nr').value, name: $('name').value, addr: $('addr').value, note: $('note').value }));
   }
   function update() {
     saveDraft();
     var m = message(), has = state.lat != null;
     $('preview').innerHTML = has ? esc(m).replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\*([^*\n]+)\*/g, '<b>$1</b>') : '<span class="hint">Het bericht verschijnt hier zodra je een locatie hebt.</span>';
     ['copy', 'wa', 'img', 'saveP'].forEach(function (id) { $(id).disabled = !has; });
-    var noShare = !shareUrl() && state.lat != null;
-    $('shareHint').textContent = $('inclShare').checked && noShare ? 'Zet de pagina online (bijv. GitHub Pages) of vul de basis-URL in bij Instellingen.' : '';
   }
 
   function copyText(t) {
@@ -376,34 +364,49 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
 
   /* ---------- afbeelding ---------- */
+  var TILE = {
+    sat: { url: function (z, x, y) { return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + z + '/' + y + '/' + x; }, max: 19, credit: 'Esri, Maxar, Earthstar Geographics' },
+    map: { url: function (z, x, y) { return 'https://tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png'; }, max: 19, credit: '\u00A9 OpenStreetMap-bijdragers' }
+  };
+  function loadTile(u) {
+    return new Promise(function (res) { var im = new Image(); im.crossOrigin = 'anonymous'; im.onload = function () { res(im); }; im.onerror = function () { res(null); }; im.src = u; });
+  }
   function buildImage() {
-    var W = 1080, H = 810, R = 6378137, lat = state.lat, lon = state.lon;
-    var mx = R * lon * Math.PI / 180, my = R * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
-    var hw = (state.range / 2) / Math.cos(lat * Math.PI / 180), hh = hw * H / W;
-    var url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=' +
-      [mx - hw, my - hh, mx + hw, my + hh].join(',') + '&bboxSR=3857&imageSR=3857&size=' + W + ',' + H + '&format=jpg&f=image';
-    return new Promise(function (res, rej) {
-      var im = new Image(); im.crossOrigin = 'anonymous';
-      im.onload = function () {
-        var c = document.createElement('canvas'); c.width = W; c.height = H; var g = c.getContext('2d');
-        g.drawImage(im, 0, 0, W, H);
-        // pin
-        var x = W / 2, y = H / 2;
-        g.save(); g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 10; g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 5;
-        g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x - 46, y - 44, x - 40, y - 100, x, y - 100); g.bezierCurveTo(x + 40, y - 100, x + 46, y - 44, x, y); g.closePath(); g.fill(); g.stroke();
-        g.restore(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y - 66, 13, 0, 7); g.fill();
-        // onderbalk
-        var name = $('name').value.trim(), addr = $('addr').value.trim();
-        g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, H - 150, W, 150);
-        g.fillStyle = '#fff'; g.textBaseline = 'alphabetic';
-        g.font = '600 46px system-ui, sans-serif'; g.fillText(clip(g, name || 'Locatie', W - 60), 30, H - 90);
-        g.font = '30px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.88)';
-        g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), W - 60), 30, H - 42);
-        g.font = '16px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.7)'; g.textAlign = 'right';
-        g.fillText('Esri, Maxar, Earthstar Geographics', W - 12, H - 10);
-        c.toBlob(function (b) { b ? res(b) : rej(); }, 'image/jpeg', .9);
-      };
-      im.onerror = rej; im.src = url;
+    var W = 1080, H = 810, lat = state.lat, lon = state.lon, T = TILE[state.layer];
+    var mpp = state.range / W;                                   // meter per pixel
+    var zf = Math.log(156543.03392 * Math.cos(lat * Math.PI / 180) / mpp) / Math.LN2;
+    var z = Math.max(2, Math.min(T.max, Math.round(zf))), n = Math.pow(2, z), k = Math.pow(2, zf - z); // k = schaal van tegel-pixels naar beeld
+    var cx = (lon + 180) / 360 * n * 256, sl = Math.sin(lat * Math.PI / 180);
+    var cy = (0.5 - Math.log((1 + sl) / (1 - sl)) / (4 * Math.PI)) * n * 256;
+    var x0 = cx - W / (2 * k), y0 = cy - H / (2 * k);
+    var tx0 = Math.floor(x0 / 256), tx1 = Math.floor((x0 + W / k) / 256), ty0 = Math.max(0, Math.floor(y0 / 256)), ty1 = Math.min(n - 1, Math.floor((y0 + H / k) / 256));
+    var jobs = [];
+    for (var ty = ty0; ty <= ty1; ty++) for (var tx = tx0; tx <= tx1; tx++) (function (tx, ty) {
+      jobs.push(loadTile(T.url(z, ((tx % n) + n) % n, ty)).then(function (im) { return { im: im, tx: tx, ty: ty }; }));
+    })(tx, ty);
+    return Promise.all(jobs).then(function (tiles) {
+      if (!tiles.some(function (t) { return t.im; })) throw new Error('geen tegels');
+      var c = document.createElement('canvas'); c.width = W; c.height = H; var g = c.getContext('2d');
+      g.fillStyle = '#cfd4d9'; g.fillRect(0, 0, W, H);
+      tiles.forEach(function (t) {
+        if (!t.im) return;
+        g.drawImage(t.im, (t.tx * 256 - x0) * k, (t.ty * 256 - y0) * k, 256 * k + 1, 256 * k + 1);
+      });
+      // pin
+      var x = W / 2, y = H / 2;
+      g.save(); g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 10; g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 5;
+      g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x - 46, y - 44, x - 40, y - 100, x, y - 100); g.bezierCurveTo(x + 40, y - 100, x + 46, y - 44, x, y); g.closePath(); g.fill(); g.stroke();
+      g.restore(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y - 66, 13, 0, 7); g.fill();
+      // onderbalk
+      var title = label(), addr = $('addr').value.trim();
+      g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, H - 150, W, 150);
+      g.fillStyle = '#fff'; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+      g.font = '600 46px system-ui, sans-serif'; g.fillText(clip(g, title || 'Locatie', W - 60), 30, H - 90);
+      g.font = '30px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.88)';
+      g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), W - 60), 30, H - 42);
+      g.font = '16px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.7)'; g.textAlign = 'right';
+      g.fillText(T.credit, W - 12, H - 10);
+      return new Promise(function (res, rej) { c.toBlob(function (b) { b ? res(b) : rej(new Error('export')); }, 'image/jpeg', .9); });
     });
   }
   function clip(g, t, w) { while (g.measureText(t).width > w && t.length > 1) t = t.slice(0, -2) + '…'; return t; }
@@ -412,10 +415,10 @@ textarea.inp { resize: vertical; min-height: 64px; }
     var b = $('img'); b.disabled = true; b.textContent = 'Bezig...';
     var msg = message();
     buildImage().then(function (blob) {
-      var f = new File([blob], ((($('name').value.trim() || 'locatie')).replace(/[^\w\-]+/g, '_')) + '.jpg', { type: 'image/jpeg' });
+      var f = new File([blob], ((label() || 'locatie').replace(/[^\w\-]+/g, '_')) + '.jpg', { type: 'image/jpeg' });
       if (navigator.canShare && navigator.canShare({ files: [f] })) return navigator.share({ files: [f], text: msg }).then(function () { saveProject(true); }).catch(function (e) { if (e && e.name !== 'AbortError') throw e; });
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = f.name; a.click();
-      copyText(msg); toast('Afbeelding opgeslagen, bericht gekopieerd');
+      copyText(msg); saveProject(true); toast('Afbeelding opgeslagen, bericht gekopieerd');
     }).catch(function () { toast('Afbeelding maken mislukt'); })
       .finally(function () { b.disabled = false; b.textContent = 'Deel afbeelding'; update(); });
   }
@@ -425,18 +428,20 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function setP(a) { lsSet(LS.projects, JSON.stringify(a)); renderP(); }
   function saveProject(silent) {
     if (state.lat == null) return false;
-    var name = $('name').value.trim();
-    if (!name) { if (!silent) { toast('Geef eerst een projectnaam'); $('name').focus(); } return false; }
-    var a = getP(), rec = { name: name, addr: $('addr').value.trim(), note: $('note').value.trim(), lat: state.lat, lon: state.lon, ts: Date.now() };
-    var i = a.findIndex(function (p) { return p.name.toLowerCase() === name.toLowerCase(); });
+    var name = $('name').value.trim(), nr = $('nr').value.trim();
+    if (!name && !nr) { if (!silent) { toast('Geef eerst een projectnaam'); $('name').focus(); } return false; }
+    var a = getP(), rec = { nr: nr, name: name, addr: $('addr').value.trim(), note: $('note').value.trim(), lat: state.lat, lon: state.lon, ts: Date.now() };
+    var key = (nr + '|' + name).toLowerCase();
+    var i = a.findIndex(function (p) { return ((p.nr || '') + '|' + p.name).toLowerCase() === key; });
     if (i >= 0) a.splice(i, 1);
     a.unshift(rec);
     setP(a);
     if (!silent) toast(i >= 0 ? 'Project bijgewerkt' : 'Project opgeslagen');
     return true;
   }
+  function pl(p) { return [p.nr, p.name].filter(Boolean).join(' \u00B7 '); }
   function loadProject(p) {
-    $('name').value = p.name; $('addr').value = p.addr || ''; $('note').value = p.note || '';
+    $('nr').value = p.nr || ''; $('name').value = p.name || ''; $('addr').value = p.addr || ''; $('note').value = p.note || '';
     setPoint(p.lat, p.lon, { addr: p.addr || '' }); window.scrollTo({ top: 0, behavior: 'smooth' }); setStatus('Project geladen.', 'ok');
   }
   function renderP() {
@@ -444,23 +449,23 @@ textarea.inp { resize: vertical; min-height: 64px; }
     $('filter').hidden = all.length < 6;
     var chips = $('chips'); chips.innerHTML = '';
     all.slice(0, 6).forEach(function (p) {
-      var c = document.createElement('button'); c.className = 'chip'; c.textContent = p.name; c.onclick = function () { loadProject(p); }; chips.appendChild(c);
+      var c = document.createElement('button'); c.className = 'chip'; c.textContent = pl(p); c.onclick = function () { loadProject(p); }; chips.appendChild(c);
     });
     chips.hidden = !all.length;
-    var a = all.filter(function (p) { return !f || (p.name + ' ' + p.addr).toLowerCase().indexOf(f) >= 0; });
+    var a = all.filter(function (p) { return !f || (pl(p) + ' ' + p.addr).toLowerCase().indexOf(f) >= 0; });
     box.innerHTML = '';
     if (!a.length) { box.innerHTML = '<p class="hint">Nog geen projecten opgeslagen.</p>'; return; }
     a.forEach(function (p) {
       var d = document.createElement('div'); d.className = 'proj';
-      d.innerHTML = '<button class="proj-main"><b>' + esc(p.name) + '</b><span>' + esc(p.addr || (fmt(p.lat) + ', ' + fmt(p.lon))) + '</span></button><button class="btn sm danger" aria-label="Verwijder ' + esc(p.name) + '">&times;</button>';
+      d.innerHTML = '<button class="proj-main"><b>' + esc(pl(p)) + '</b><span>' + esc(p.addr || (fmt(p.lat) + ', ' + fmt(p.lon))) + '</span></button><button class="btn sm danger" aria-label="Verwijder ' + esc(pl(p)) + '">&times;</button>';
       d.children[0].onclick = function () { loadProject(p); };
-      d.children[1].onclick = function () { if (confirm('"' + p.name + '" verwijderen?')) setP(getP().filter(function (x) { return x.ts !== p.ts || x.name !== p.name; })); };
+      d.children[1].onclick = function () { if (confirm('"' + pl(p) + '" verwijderen?')) setP(getP().filter(function (x) { return x.ts !== p.ts || x.name !== p.name || x.nr !== p.nr; })); };
       box.appendChild(d);
     });
   }
   function resetAll() {
     state.lat = state.lon = null;
-    ['q', 'name', 'addr', 'note'].forEach(function (id) { $(id).value = ''; });
+    ['q', 'nr', 'name', 'addr', 'note'].forEach(function (id) { $(id).value = ''; });
     if (marker) { map.removeLayer(marker); marker = null; }
     $('coords').textContent = ''; $('results').innerHTML = '';
     setStatus('Plak een Google Maps-link, coördinaten (52.0907, 5.1214) of typ een adres. Of tik op de kaart.');
@@ -495,6 +500,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   initMap($('map'), false);
   map.on('click', function (e) { setPoint(e.latlng.lat, e.latlng.lng, { reverse: true, keepView: true }); setStatus('Pin geplaatst. Sleep om te verfijnen.', 'ok'); });
   $('layer').onclick = function (e) { if (e.target.dataset.l) setLayer(e.target.dataset.l); };
+  setLayer(lsGet('locdelen.layer', 'sat') === 'map' ? 'map' : 'sat');
   $('go').onclick = lookup;
   $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookup(); });
   $('q').addEventListener('paste', function () { setTimeout(function () { if (/^https?:|^\s*-?\d+\.\d+/.test($('q').value)) lookup(); }, 30); });
@@ -504,10 +510,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     navigator.geolocation.getCurrentPosition(function (p) { setPoint(p.coords.latitude, p.coords.longitude, { reverse: true }); setStatus('Je huidige locatie. Sleep de pin om te verfijnen.', 'ok'); },
       function () { setStatus('Geen toegang tot je locatie.', 'err'); }, { enableHighAccuracy: true, timeout: 10000 });
   };
-  ['name', 'addr', 'note', 'base'].forEach(function (id) { $(id).addEventListener('input', function () { if (id === 'base') lsSet(LS.base, $('base').value.trim()); update(); }); });
-  $('base').value = lsGet(LS.base, '');
-  $('inclShare').checked = lsGet(LS.share, '1') === '1';
-  $('inclShare').onchange = function () { lsSet(LS.share, this.checked ? '1' : '0'); update(); };
+  ['nr', 'name', 'addr', 'note'].forEach(function (id) { $(id).addEventListener('input', update); });
   $('range').onclick = function (e) {
     var r = e.target.dataset.r; if (!r) return; state.range = +r; lsSet(LS.range, r);
     [].forEach.call($('range').children, function (b) { b.setAttribute('aria-pressed', b.dataset.r === r ? 'true' : 'false'); });
@@ -534,9 +537,10 @@ textarea.inp { resize: vertical; min-height: 64px; }
       var inc = JSON.parse(t), cur = getP();
       if (!Array.isArray(inc)) throw 0;
       inc.forEach(function (p) {
-        if (!p || !p.name || !validLL(+p.lat, +p.lon)) return;
-        var i = cur.findIndex(function (x) { return x.name.toLowerCase() === p.name.toLowerCase(); });
-        var rec = { name: String(p.name), addr: String(p.addr || ''), note: String(p.note || ''), lat: +p.lat, lon: +p.lon, ts: +p.ts || Date.now() };
+        if (!p || !(p.name || p.nr) || !validLL(+p.lat, +p.lon)) return;
+        var k = (String(p.nr || '') + '|' + String(p.name || '')).toLowerCase();
+        var i = cur.findIndex(function (x) { return ((x.nr || '') + '|' + (x.name || '')).toLowerCase() === k; });
+        var rec = { nr: String(p.nr || ''), name: String(p.name || ''), addr: String(p.addr || ''), note: String(p.note || ''), lat: +p.lat, lon: +p.lon, ts: +p.ts || Date.now() };
         if (i >= 0) cur[i] = rec; else cur.push(rec);
       });
       setP(cur); toast('Geïmporteerd');
@@ -546,7 +550,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   try {
     var dr = JSON.parse(lsGet(LS.draft, 'null'));
     if (dr && dr.lat != null && validLL(+dr.lat, +dr.lon)) {
-      $('name').value = dr.name || ''; $('addr').value = dr.addr || ''; $('note').value = dr.note || '';
+      $('nr').value = dr.nr || ''; $('name').value = dr.name || ''; $('addr').value = dr.addr || ''; $('note').value = dr.note || '';
       setPoint(+dr.lat, +dr.lon, { addr: dr.addr || '', keepView: false });
       setStatus('Vorige locatie hersteld. Tik op Nieuw voor een lege start.');
     } else $('q').focus();

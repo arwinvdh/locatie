@@ -727,7 +727,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.fillStyle = 'rgba(0,31,56,.96)'; g.fillRect(0, H - BH, W, BH);
       g.fillStyle = '#76b720'; g.fillRect(0, H - BH, W, 8);
       // vaste rasterlijnen (baselines) zodat links en rechts exact op elkaar aansluiten
-      var T = H - BH, PAD = 36, r0 = T + 52, r1 = T + 52, r2 = T + 112, r3 = T + 162, r4 = T + 200;
+      var T = H - BH, PAD = 36, r0 = T + 96, r1 = T + 80, r2 = T + 138, r3 = T + 184, r4 = T + 220;
       var rt = [];
       if (who) rt.push({ t: role().toUpperCase(), f: '600 17px Avenir Next, Avenir, system-ui, sans-serif', c: '#8fd000', y: r0 }, { t: who, f: '600 32px Avenir Next, Avenir, system-ui, sans-serif', c: '#fff', y: r2 });
       if (tel) rt.push({ t: tel, f: '32px Avenir Next, Avenir, system-ui, sans-serif', c: '#fff', y: who ? r3 : r2 });
@@ -735,13 +735,13 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.textAlign = 'left'; g.textBaseline = 'alphabetic'; var cx = W - PAD - rw;
       rt.forEach(function (r) { g.font = r.f; g.fillStyle = r.c; g.fillText(r.t, cx, r.y); });
       var lw = rt.length ? cx - PAD - 40 : W - 2 * PAD;
-      // titel = projectnaam (groot, krimpt mee tot 36px als hij lang is); projectnummer klein en groen erboven
-      if (nr) { g.font = '600 30px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = '#8fd000'; g.fillText(clip(g, nr, lw), PAD, r1); }
+      // projectnummer (groen) en projectnaam (wit) bijna even groot; de naam krimpt mee tot 34px als hij lang is
+      if (nr) { g.font = '700 58px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = '#8fd000'; g.fillText(clip(g, nr, lw), PAD, r1); }
       var title = nm || (nr ? '' : 'Locatie');
       if (title) {
-        var fs = 56; g.font = '700 ' + fs + 'px Avenir Next, Avenir, system-ui, sans-serif';
-        while (fs > 36 && g.measureText(title).width > lw) { fs -= 2; g.font = '700 ' + fs + 'px Avenir Next, Avenir, system-ui, sans-serif'; }
-        g.fillStyle = '#fff'; g.fillText(clip(g, title, lw), PAD, r2);
+        var fs = nr ? 50 : 58; g.font = '700 ' + fs + 'px Avenir Next, Avenir, system-ui, sans-serif';
+        while (fs > 34 && g.measureText(title).width > lw) { fs -= 2; g.font = '700 ' + fs + 'px Avenir Next, Avenir, system-ui, sans-serif'; }
+        g.fillStyle = '#fff'; g.fillText(clip(g, title, lw), PAD, nr ? r2 : r1 + 30);
       }
       g.font = '30px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.88)';
       var ay = [r3, r4];

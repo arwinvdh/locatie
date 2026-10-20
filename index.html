@@ -565,8 +565,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x - 46, y - 44, x - 40, y - 100, x, y - 100); g.bezierCurveTo(x + 40, y - 100, x + 46, y - 44, x, y); g.closePath(); g.fill(); g.stroke();
       g.restore(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y - 66, 13, 0, 7); g.fill();
       // regiokaart linksboven, noordpijl rechtsboven
-      if (region) { drawRegion(g, region, 28, 28); [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); }
-      var nx = W - 64, ny = 64;
+      if (region) { drawRegion(g, region, 60, 60); [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); }
+      var nx = W - 84, ny = 84;
       g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.arc(nx, ny, 40, 0, 7); g.fill();
       g.fillStyle = '#111'; g.beginPath(); g.moveTo(nx, ny - 26); g.lineTo(nx + 11, ny + 8); g.lineTo(nx, ny + 2); g.lineTo(nx - 11, ny + 8); g.closePath(); g.fill();
       g.font = '700 20px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('N', nx, ny + 30);
@@ -590,15 +590,19 @@ textarea.inp { resize: vertical; min-height: 64px; }
       wrap(g, addr || (fmt(lat) + ', ' + fmt(lon)), lw, 2).forEach(function (ln) { g.fillText(ln, 36, ty); ty += 38; });
       g.font = '14px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.5)'; g.textAlign = 'right';
       g.fillText(credits.join(' \u00B7 '), W - 14, H - 8);
-      // witte rand met schaduw; binnenradius concentrisch met de afronding die WhatsApp (iOS) zelf op de buitenhoeken zet (~5% van de breedte)
-      var M = 44, WA_R = Math.round((W + 2 * M) * 0.05), R = Math.max(8, WA_R - M), out = document.createElement('canvas'); out.width = W + 2 * M; out.height = H + 2 * M;
+      // witte rand met schaduw. Gemeten in een iOS-screenshot: WhatsApp zet ~6,9% van de breedte als buitenradius en snijdt ~2,4% per zijde af,
+      // dus de zichtbare rand is ~27px. Boven: binnenradius concentrisch (buiten - rand). Onder: klein, want WhatsApp laat daar met bijschrift een rechte rand.
+      var M = 56, WA_R = Math.round((W + 2 * M) * 0.069), RT = Math.max(10, WA_R - 27), RB = 14, out = document.createElement('canvas'); out.width = W + 2 * M; out.height = H + 2 * M;
       var o2 = out.getContext('2d');
       o2.fillStyle = '#fff'; o2.fillRect(0, 0, out.width, out.height);
       o2.save(); o2.shadowColor = 'rgba(0,31,56,.32)'; o2.shadowBlur = 30; o2.shadowOffsetY = 10; o2.fillStyle = '#fff';
-      rrect(o2, M, M, W, H, R); o2.fill(); o2.restore();
-      o2.save(); rrect(o2, M, M, W, H, R); o2.clip(); o2.drawImage(cv, M, M); o2.restore();
+      rrect2(o2, M, M, W, H, RT, RB); o2.fill(); o2.restore();
+      o2.save(); rrect2(o2, M, M, W, H, RT, RB); o2.clip(); o2.drawImage(cv, M, M); o2.restore();
       return new Promise(function (res, rej) { out.toBlob(function (bl) { bl ? res(bl) : rej(new Error('export')); }, 'image/jpeg', .92); });
     });
+  }
+  function rrect2(g, x, y, w, h, rt, rb) {
+    g.beginPath(); g.moveTo(x + rt, y); g.arcTo(x + w, y, x + w, y + h, rt); g.arcTo(x + w, y + h, x, y + h, rb); g.arcTo(x, y + h, x, y, rb); g.arcTo(x, y, x + w, y, rt); g.closePath();
   }
   function wrap(g, t, w, max) {
     var words = t.split(/\s+/), lines = [], cur = '';

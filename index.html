@@ -269,7 +269,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function fmt(n) { return (+n).toFixed(6).replace(/0+$/, '').replace(/\.$/, ''); }
   function validLL(a, b) { return isFinite(a) && isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180; }
   function googleUrl(lat, lon) { return 'https://www.google.com/maps?q=' + fmt(lat) + ',' + fmt(lon); }
-  function routeUrl(lat, lon) { return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&dir_action=navigate&destination=' + fmt(lat) + ',' + fmt(lon); }
+  function routeUrl(lat, lon) { return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + fmt(lat) + ',' + fmt(lon); }
   function linkRoute() { return lsGet('locdelen.link', 'pin') === 'route'; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 

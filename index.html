@@ -534,7 +534,14 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), lw), 36, H - 28);
       g.font = '14px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.5)'; g.textAlign = 'right';
       g.fillText(credits.join(' \u00B7 '), W - 14, H - 8);
-      return new Promise(function (res, rej) { cv.toBlob(function (bl) { bl ? res(bl) : rej(new Error('export')); }, 'image/jpeg', .9); });
+      // witte rand met schaduw rond de kaart
+      var M = 44, R = 20, out = document.createElement('canvas'); out.width = W + 2 * M; out.height = H + 2 * M;
+      var o2 = out.getContext('2d');
+      o2.fillStyle = '#fff'; o2.fillRect(0, 0, out.width, out.height);
+      o2.save(); o2.shadowColor = 'rgba(0,31,56,.32)'; o2.shadowBlur = 30; o2.shadowOffsetY = 10; o2.fillStyle = '#fff';
+      rrect(o2, M, M, W, H, R); o2.fill(); o2.restore();
+      o2.save(); rrect(o2, M, M, W, H, R); o2.clip(); o2.drawImage(cv, M, M); o2.restore();
+      return new Promise(function (res, rej) { out.toBlob(function (bl) { bl ? res(bl) : rej(new Error('export')); }, 'image/jpeg', .92); });
     });
   }
   function rrect(g, x, y, w, h, r) {

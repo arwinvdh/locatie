@@ -185,7 +185,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
         <div class="opts">
           <label class="check"><input type="checkbox" id="optLabels"> Straatnamen</label>
           <label class="check"><input type="checkbox" id="optParcel"> Perceelgrenzen</label>
-          <label class="check"><input type="checkbox" id="optMini"> Minikaart NL</label>
+          <label class="check"><input type="checkbox" id="optMini"> Regiokaart</label>
           <label class="check"><input type="checkbox" id="optDate"> Datum</label>
         </div>
         <button class="btn" id="saveP">Opslaan als project</button>
@@ -244,6 +244,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     esri: { tpl: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', max: 19, credit: 'Esri' },
     osm: { tpl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max: 19, credit: '\u00A9 OpenStreetMap' },
     labels: { tpl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', max: 19, credit: 'Esri' },
+    gemeente: { wms: 'https://service.pdok.nl/kadaster/bestuurlijkegebieden/wms/v1_0', layers: 'Gemeentegebied', credit: 'Kadaster' },
     parcel: { wms: 'https://service.pdok.nl/kadaster/kadastralekaart/wms/v5_0', layers: 'Perceel', credit: 'Kadaster' }
   };
   var cache = {}, active = {};
@@ -466,25 +467,43 @@ textarea.inp { resize: vertical; min-height: 64px; }
     });
   }
 
-  // vereenvoudigde omtrek van Nederland [lon, lat]
-  var NL_OUTLINE = [[3.37,51.37],[3.43,51.54],[3.55,51.62],[3.7,51.7],[3.85,51.83],[4.0,51.93],[4.12,51.99],[4.27,52.1],[4.4,52.2],[4.52,52.37],[4.58,52.46],[4.6,52.62],[4.65,52.78],[4.75,52.96],[5.1,53.02],[5.33,53.07],[5.42,53.18],[5.65,53.3],[5.95,53.4],[6.2,53.42],[6.6,53.4],[6.9,53.33],[7.2,53.24],[7.1,52.9],[7.05,52.65],[7.0,52.5],[6.9,52.43],[6.75,52.2],[6.8,51.97],[6.4,51.85],[6.1,51.85],[6.03,51.7],[6.2,51.38],[6.05,51.2],[5.9,51.0],[6.02,50.77],[5.7,50.76],[5.72,50.95],[5.75,51.15],[5.6,51.3],[5.45,51.35],[4.9,51.45],[4.45,51.47],[4.2,51.4],[4.05,51.28],[3.6,51.32]];
-  function drawMini(g, lat, lon) {
-    var x0 = 24, y0 = 24, w = 176, h = 200, pad = 12, aw = w - 2 * pad, ah = h - 2 * pad;
-    var spanLon = (NL.e - NL.w - 0.1) * 0.616, spanLat = NL.n - NL.s - 0.2;
-    var sc = Math.min(aw / spanLon, ah / spanLat);
-    var ox = x0 + pad + (aw - spanLon * sc) / 2, oy = y0 + pad + (ah - spanLat * sc) / 2;
-    function P(la, lo) { return [ox + (lo - 3.25) * 0.616 * sc, oy + (53.4 - la) * sc]; }
-    g.save(); g.fillStyle = 'rgba(255,255,255,.9)'; rrect(g, x0, y0, w, h, 14); g.fill();
-    g.beginPath(); NL_OUTLINE.forEach(function (q, i) { var p = P(q[1], q[0]); i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); }); g.closePath();
-    g.fillStyle = '#dcebf7'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = '#014983'; g.lineJoin = 'round'; g.stroke();
-    var d = P(lat, lon);
-    g.fillStyle = 'rgba(229,50,45,.25)'; g.beginPath(); g.arc(d[0], d[1], 17, 0, 7); g.fill();
-    g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 3.5; g.beginPath(); g.arc(d[0], d[1], 8, 0, 7); g.fill(); g.stroke();
+  // regiokaart: uitgezoomd beeld met gemeentegrens, linksboven
+  function gemeenteNaam(lat, lon) {
+    return timeoutFetch('https://api.pdok.nl/bzk/locatieserver/search/v3_1/reverse?type=gemeente&rows=1&fl=weergavenaam&lat=' + lat + '&lon=' + lon, 4000)
+      .then(function (r) { return r.json(); })
+      .then(function (j) { var d = j.response && j.response.docs && j.response.docs[0]; return d ? String(d.weergavenaam || '').replace(/^Gemeente\s+/i, '') : ''; })
+      .catch(function () { return ''; });
+  }
+  function regionPart(lat, lon) {
+    var S = 330, rng = 14000, nl = inNL(lat, lon);
+    var c = { W: S, H: S, lat: lat, lon: lon, zf: Math.log(156543.03392 * Math.cos(lat * Math.PI / 180) / (rng / S)) / Math.LN2 };
+    var bk = nl ? 'brt' : 'osm';
+    return Promise.all([
+      loadLayer(bk, c).then(function (b) { return !b.ok && SRC[bk].fb ? loadLayer(SRC[bk].fb, c) : b; }),
+      nl ? loadLayer('gemeente', c) : Promise.resolve(null),
+      nl ? gemeenteNaam(lat, lon) : Promise.resolve('')
+    ]).then(function (r) {
+      if (!r[0].ok) return null;
+      return { S: S, base: r[0], gem: r[1] && r[1].ok ? r[1] : null, name: r[2] };
+    });
+  }
+  function drawRegion(g, R, x0, y0) {
+    var S = R.S, rad = 18;
+    g.save(); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 14; g.shadowOffsetY = 4; g.fillStyle = '#fff'; rrect(g, x0 - 5, y0 - 5, S + 10, S + 10, rad + 4); g.fill(); g.restore();
+    g.save(); rrect(g, x0, y0, S, S, rad); g.clip(); g.translate(x0, y0);
+    R.base.draw(g); if (R.gem) R.gem.draw(g);
+    var d = S / 2;
+    g.fillStyle = 'rgba(229,50,45,.28)'; g.beginPath(); g.arc(d, d, 24, 0, 7); g.fill();
+    g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.arc(d, d, 10, 0, 7); g.fill(); g.stroke();
+    if (R.name) {
+      g.fillStyle = 'rgba(0,31,56,.88)'; g.fillRect(0, S - 44, S, 44);
+      g.fillStyle = '#fff'; g.textAlign = 'left'; g.font = '600 22px system-ui, sans-serif'; g.fillText(clip(g, R.name, S - 24), 12, S - 14);
+    }
     g.restore();
   }
 
   function buildImage() {
-    var W = 1080, H = 810, lat = state.lat, lon = state.lon, o = state.opts;
+    var W = 1080, H = 1350, lat = state.lat, lon = state.lon, o = state.opts;
     var mpp = state.range / W;
     var c = { W: W, H: H, lat: lat, lon: lon, zf: Math.log(156543.03392 * Math.cos(lat * Math.PI / 180) / mpp) / Math.LN2 };
     var bk = baseKey();
@@ -496,8 +515,9 @@ textarea.inp { resize: vertical; min-height: 64px; }
       var extra = [];
       if (state.layer === 'sat' && o.labels) extra.push(loadLayer('labels', c));
       if (o.parcel) extra.push(loadLayer('parcel', c));
-      return Promise.all(extra).then(function (ex) { return [base].concat(ex); });
-    }).then(function (ls) {
+      return Promise.all(extra.concat([o.mini ? regionPart(lat, lon) : null])).then(function (ex) { var rg = ex.pop(); return [[base].concat(ex), rg]; });
+    }).then(function (pr) {
+      var ls = pr[0], region = pr[1];
       var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var g = cv.getContext('2d');
       g.fillStyle = '#cfd4d9'; g.fillRect(0, 0, W, H);
       ls.forEach(function (l) { l.draw(g); });
@@ -507,19 +527,19 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.save(); g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 10; g.fillStyle = '#E5322D'; g.strokeStyle = '#fff'; g.lineWidth = 5;
       g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x - 46, y - 44, x - 40, y - 100, x, y - 100); g.bezierCurveTo(x + 40, y - 100, x + 46, y - 44, x, y); g.closePath(); g.fill(); g.stroke();
       g.restore(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y - 66, 13, 0, 7); g.fill();
-      // minikaart linksboven, noordpijl rechtsboven
-      if (o.mini && inNL(lat, lon)) drawMini(g, lat, lon);
+      // regiokaart linksboven, noordpijl rechtsboven
+      if (region) { drawRegion(g, region, 28, 28); [region.base, region.gem].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); }
       var nx = W - 64, ny = 64;
       g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.arc(nx, ny, 40, 0, 7); g.fill();
       g.fillStyle = '#111'; g.beginPath(); g.moveTo(nx, ny - 26); g.lineTo(nx + 11, ny + 8); g.lineTo(nx, ny + 2); g.lineTo(nx - 11, ny + 8); g.closePath(); g.fill();
       g.font = '700 20px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('N', nx, ny + 30);
       // onderbalk
-      var BH = 170, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();
+      var BH = 190, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();
       var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? $('myPhone').value.trim() : '';
-      g.fillStyle = 'rgba(0,31,56,.95)'; g.fillRect(0, H - BH, W, BH);
+      g.fillStyle = 'rgba(0,31,56,.96)'; g.fillRect(0, H - BH, W, BH);
       g.fillStyle = '#76b720'; g.fillRect(0, H - BH, 10, BH);
       // rechterkolom: datum en contact
-      var rt = [], by = H - BH + 38;
+      var rt = [], by = H - BH + 42;
       if (o.date) rt.push({ t: 'Status ' + new Date().toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }), f: '20px system-ui, sans-serif', c: 'rgba(255,255,255,.6)', dy: 0 });
       if (who) { rt.push({ t: 'UITVOERDER', f: '600 15px system-ui, sans-serif', c: '#8fd000', dy: 40 }); rt.push({ t: who, f: '600 26px system-ui, sans-serif', c: '#fff', dy: 30 }); }
       if (tel) rt.push({ t: tel, f: '26px system-ui, sans-serif', c: '#fff', dy: who ? 32 : 44 });
@@ -527,11 +547,11 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.textAlign = 'right'; g.textBaseline = 'alphabetic';
       rt.forEach(function (r) { by += r.dy; g.font = r.f; g.fillStyle = r.c; g.fillText(r.t, W - 30, by); });
       var lw = rt.length ? W - 36 - rw - 60 : W - 60;
-      g.textAlign = 'left'; var ty = H - BH + 44;
+      g.textAlign = 'left'; var ty = H - BH + 52;
       if (nr) { g.font = '600 26px system-ui, sans-serif'; g.fillStyle = '#8fd000'; g.fillText(clip(g, nr, lw), 36, ty); ty += 50; } else ty += 14;
       g.font = '700 46px system-ui, sans-serif'; g.fillStyle = '#fff'; g.fillText(clip(g, nm || (nr ? '' : 'Locatie'), lw), 36, ty);
       g.font = '28px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.85)';
-      g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), lw), 36, H - 28);
+      g.fillText(clip(g, addr || (fmt(lat) + ', ' + fmt(lon)), lw), 36, H - 34);
       g.font = '14px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.5)'; g.textAlign = 'right';
       g.fillText(credits.join(' \u00B7 '), W - 14, H - 8);
       // witte rand met schaduw rond de kaart

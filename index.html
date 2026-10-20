@@ -152,6 +152,17 @@ textarea.inp { resize: vertical; min-height: 64px; }
     <div style="display:grid;gap:1rem" class="sticky">
       <div class="card">
         <h2>3 &middot; Versturen</h2>
+        <div class="row" style="gap:1rem">
+          <label class="check"><input type="checkbox" id="useWho"> Uitvoerder</label>
+          <label class="check"><input type="checkbox" id="usePhone"> Telefoonnummer</label>
+        </div>
+        <details id="mine"><summary class="hint" style="cursor:pointer">Mijn gegevens</summary>
+          <div class="row" style="margin-top:.5rem">
+            <div class="field grow"><label for="myName">Naam uitvoerder</label><input class="inp" id="myName" autocomplete="name"></div>
+            <div class="field grow"><label for="myPhone">Telefoon</label><input class="inp" id="myPhone" type="tel" autocomplete="tel"></div>
+          </div>
+          <p class="hint">Blijft alleen op dit apparaat staan.</p>
+        </details>
         <div class="wa"><div class="wa-b" id="preview"></div></div>
         <div class="row">
           <div class="seg" id="range"><button data-r="150" aria-pressed="false">Dichtbij</button><button data-r="400" aria-pressed="true">Midden</button><button data-r="1200" aria-pressed="false">Ruim</button></div>
@@ -340,11 +351,17 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function message() {
     if (state.lat == null) return '';
     var title = label(), addr = $('addr').value.trim(), note = $('note').value.trim(), out = [];
-    if (title) out.push('\uD83D\uDCCD *' + title + '*');
-    if (addr) out.push('\uD83C\uDFE0 ' + addr);
-    if (note) out.push('\uD83D\uDCDD ' + note);
+    var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? $('myPhone').value.trim() : '';
+    if (title) out.push('\uD83C\uDFD7\uFE0F *' + title + '*');
+    if (addr) out.push('\uD83D\uDCCD ' + addr);
+    if (note) out.push('\u2139\uFE0F ' + note);
+    if (who || tel) {
+      out.push('');
+      if (who) out.push('\uD83D\uDC77 Uitvoerder: ' + who);
+      if (tel) out.push('\uD83D\uDCDE ' + tel);
+    }
     out.push('');
-    out.push('\uD83D\uDDFA\uFE0F ' + googleUrl(state.lat, state.lon));
+    out.push(googleUrl(state.lat, state.lon));
     return out.join('\n').replace(/^\n+/, '');
   }
   function saveDraft() {
@@ -511,6 +528,17 @@ textarea.inp { resize: vertical; min-height: 64px; }
       function () { setStatus('Geen toegang tot je locatie.', 'err'); }, { enableHighAccuracy: true, timeout: 10000 });
   };
   ['nr', 'name', 'addr', 'note'].forEach(function (id) { $(id).addEventListener('input', update); });
+  [['myName', 'locdelen.who'], ['myPhone', 'locdelen.phone']].forEach(function (x) {
+    $(x[0]).value = lsGet(x[1], ''); $(x[0]).addEventListener('input', function () { lsSet(x[1], this.value.trim()); update(); });
+  });
+  [['useWho', 'locdelen.useWho', 'myName'], ['usePhone', 'locdelen.usePhone', 'myPhone']].forEach(function (x) {
+    $(x[0]).checked = lsGet(x[1], '1') === '1';
+    $(x[0]).onchange = function () {
+      lsSet(x[1], this.checked ? '1' : '0');
+      if (this.checked && !$(x[2]).value.trim()) { $('mine').open = true; $(x[2]).focus(); }
+      update();
+    };
+  });
   $('range').onclick = function (e) {
     var r = e.target.dataset.r; if (!r) return; state.range = +r; lsSet(LS.range, r);
     [].forEach.call($('range').children, function (b) { b.setAttribute('aria-pressed', b.dataset.r === r ? 'true' : 'false'); });

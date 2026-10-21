@@ -641,10 +641,24 @@ textarea.inp { resize: vertical; min-height: 64px; }
     var sc = 256 * Math.pow(2, zf), sl = Math.sin(lat * Math.PI / 180);
     return [(lon + 180) / 360 * sc, (0.5 - Math.log((1 + sl) / (1 - sl)) / (4 * Math.PI)) * sc];
   }
+  // plaatsen rond de pin: steden, dorpen (OpenStreetMap via Overpass, gratis); bij een fout geen labels
+  function placesAround(lat, lon, radius) {
+    var q = '[out:json][timeout:8];node(around:' + radius + ',' + lat + ',' + lon + ')[place~"^(city|town|village)$"][name];out 60;';
+    var hosts = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+    return hosts.reduce(function (pr, h) {
+      return pr.catch(function () {
+        return timeoutFetch(h + '?data=' + encodeURIComponent(q), 7000).then(function (r) { return r.json(); }).then(function (j) {
+          if (!j || !j.elements) throw new Error('leeg');
+          return j.elements.map(function (e) { return { name: e.tags.name, lat: e.lat, lon: e.lon, rank: { city: 3, town: 2, village: 1 }[e.tags.place] || 0, pop: +e.tags.population || 0 }; });
+        });
+      });
+    }, Promise.reject()).catch(function () { return []; });
+  }
   function regionPart(lat, lon) {
     var S = 330, nl = inNL(lat, lon);
-    return (nl ? Promise.all([gemeenteGeo(lat, lon), gemeenteNaam(lat, lon)]) : Promise.resolve([null, ''])).then(function (r) {
-      var geo = r[0], name = (geo && geo.name) || r[1], clat = lat, clon = lon, mode = lsGet('locdelen.regio', 'omgeving'), rng = mode === 'omgeving' ? 7000 : 25000;
+    var mode = lsGet('locdelen.regio', 'omgeving');
+    return (nl && mode === 'gemeente' ? Promise.all([gemeenteGeo(lat, lon), gemeenteNaam(lat, lon)]) : Promise.resolve([null, ''])).then(function (r) {
+      var geo = r[0], name = (geo && geo.name) || r[1], clat = lat, clon = lon, rng = mode === 'omgeving' ? 12000 : 25000;
       if (geo && mode === 'gemeente') {
         var b = geo.bbox; clat = (b[1] + b[3]) / 2; clon = (b[0] + b[2]) / 2;
         var wm = (b[2] - b[0]) * 111320 * Math.cos(clat * Math.PI / 180), hm = (b[3] - b[1]) * 110540;
@@ -652,12 +666,37 @@ textarea.inp { resize: vertical; min-height: 64px; }
       }
       var zf = Math.log(156543.03392 * Math.cos(clat * Math.PI / 180) / (rng / S)) / Math.LN2;
       var c = { W: S, H: S, lat: clat, lon: clon, zf: zf }, bk = nl ? 'brt' : 'osm';
-      return loadLayer(bk, c).then(function (b) { return !b.ok && SRC[bk].fb ? loadLayer(SRC[bk].fb, c) : b; }).then(function (base) {
+      var placesP = mode === 'omgeving' ? placesAround(lat, lon, Math.round(rng * 0.75)) : Promise.resolve([]);
+      return Promise.all([loadLayer(bk, c).then(function (b) { return !b.ok && SRC[bk].fb ? loadLayer(SRC[bk].fb, c) : b; }), placesP]).then(function (both) {
+        var base = both[0], places = both[1];
         if (!base.ok) return null;
         var cp = worldPx(clat, clon, zf), pp = worldPx(lat, lon, zf);
         var ringsPx = geo ? geo.rings.map(function (rg) { return rg.map(function (q) { var w = worldPx(q[1], q[0], zf); return [S / 2 + w[0] - cp[0], S / 2 + w[1] - cp[1]]; }); }) : null;
-        return { S: S, base: base, rings: ringsPx, dot: [S / 2 + pp[0] - cp[0], S / 2 + pp[1] - cp[1]], name: name, fade: mode === 'gemeente' };
+        return { S: S, base: base, rings: ringsPx, dot: [S / 2 + pp[0] - cp[0], S / 2 + pp[1] - cp[1]], name: name, fade: mode === 'gemeente', places: places.map(function (pl) { var w = worldPx(pl.lat, pl.lon, zf); return { name: pl.name, rank: pl.rank, pop: pl.pop, x: S / 2 + w[0] - cp[0], y: S / 2 + w[1] - cp[1] }; }) };
       });
+    });
+  }
+  function drawPlaces(g, R) {
+    var S = R.S, taken = [[R.dot[0] - 24, R.dot[1] - 24, 48, 48]], font = { 3: '700 21px', 2: '700 19px', 1: '600 17px' };
+    var list = R.places.filter(function (p) { return p.x > 4 && p.x < S - 4 && p.y > 4 && p.y < S - 4; })
+      .sort(function (a, b) { return b.rank - a.rank || b.pop - a.pop; });
+    var shown = 0, h = 28;
+    list.forEach(function (p) {
+      if (shown >= 9) return;
+      g.font = (font[p.rank] || font[1]) + ' Avenir Next, Avenir, system-ui, sans-serif';
+      var w = g.measureText(p.name).width + 16;
+      // eerst op de plek zelf, anders eromheen schuiven tot er ruimte is
+      var cand = [[0, 0], [0, -h - 4], [0, h + 4], [w / 2 + 8, 0], [-w / 2 - 8, 0], [w / 2, -h - 4], [-w / 2, -h - 4], [w / 2, h + 4], [-w / 2, h + 4]];
+      for (var c = 0; c < cand.length; c++) {
+        var x = Math.max(6, Math.min(S - w - 6, p.x - w / 2 + cand[c][0])), y = Math.max(6, Math.min(S - h - 6, p.y - h / 2 + cand[c][1])), hit = false;
+        for (var i = 0; i < taken.length; i++) { var t = taken[i]; if (x < t[0] + t[2] + 3 && x + w > t[0] - 3 && y < t[1] + t[3] + 3 && y + h > t[1] - 3) { hit = true; break; } }
+        if (hit) continue;
+        taken.push([x, y, w, h]); shown++;
+        g.fillStyle = '#001f38'; g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.beginPath(); g.arc(p.x, p.y, 4, 0, 7); g.fill(); g.stroke();
+        g.fillStyle = 'rgba(255,255,255,.92)'; rrect(g, x, y, w, h, 9); g.fill();
+        g.fillStyle = '#001f38'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText(p.name, x + 8, y + h - 8);
+        return;
+      }
     });
   }
   function drawRegion(g, R, x0, y0) {
@@ -672,6 +711,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.beginPath(); R.rings.forEach(function (rg) { rg.forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); });
       g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 8; g.stroke(); g.strokeStyle = '#76b720'; g.lineWidth = 4.5; g.stroke();
     }
+    if (R.places && R.places.length) drawPlaces(g, R);
     var d = R.dot;
     g.fillStyle = 'rgba(1,73,131,.28)'; g.beginPath(); g.arc(d[0], d[1], 26, 0, 7); g.fill();
     g.fillStyle = '#014983'; g.strokeStyle = '#fff'; g.lineWidth = 4.5; g.beginPath(); g.arc(d[0], d[1], 11, 0, 7); g.fill(); g.stroke();
@@ -716,7 +756,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
         g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText(pl, px + pw / 2, py + 33);
       }
       // regiokaart linksboven, noordpijl rechtsboven
-      if (region) { drawRegion(g, region, 60, 60); [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); }
+      if (region) { drawRegion(g, region, 60, 60); [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); if (region.places && region.places.length && credits.indexOf('\u00A9 OpenStreetMap') < 0) credits.push('\u00A9 OpenStreetMap'); }
       var nx = W - 100, ny = 100;
       g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.arc(nx, ny, 40, 0, 7); g.fill();
       g.fillStyle = '#111'; g.beginPath(); g.moveTo(nx, ny - 26); g.lineTo(nx + 11, ny + 8); g.lineTo(nx, ny + 2); g.lineTo(nx - 11, ny + 8); g.closePath(); g.fill();

@@ -291,7 +291,17 @@ textarea.inp { resize: vertical; min-height: 64px; }
 
   /* ---------- kaart ---------- */
   var NL = { s: 50.7, n: 53.6, w: 3.2, e: 7.3 };
-  function inNL(lat, lon) { return lat >= NL.s && lat <= NL.n && lon >= NL.w && lon <= NL.e; }
+  // grove omtrek van Nederland [lon, lat]; een kader is te ruim (Brussel en Keulen vallen erin)
+  var NL_POLY = [[3.37,51.37],[3.43,51.54],[3.55,51.62],[3.7,51.7],[3.85,51.83],[4.0,51.93],[4.12,51.99],[4.27,52.1],[4.4,52.2],[4.52,52.37],[4.58,52.46],[4.6,52.62],[4.65,52.78],[4.75,52.96],[5.1,53.02],[5.33,53.07],[5.42,53.18],[5.65,53.3],[5.95,53.4],[6.2,53.42],[6.6,53.4],[6.9,53.33],[7.2,53.24],[7.1,52.9],[7.05,52.65],[7.0,52.5],[6.9,52.43],[6.75,52.2],[6.8,51.97],[6.4,51.85],[6.1,51.85],[6.03,51.7],[6.2,51.38],[6.05,51.2],[5.9,51.0],[6.02,50.77],[5.7,50.76],[5.72,50.95],[5.75,51.15],[5.6,51.3],[5.45,51.35],[4.9,51.45],[4.45,51.47],[4.2,51.4],[4.05,51.28],[3.6,51.32]];
+  function inNL(lat, lon) {
+    if (lat < NL.s || lat > NL.n || lon < NL.w || lon > NL.e) return false;
+    var inside = false;
+    for (var i = 0, j = NL_POLY.length - 1; i < NL_POLY.length; j = i++) {
+      var xi = NL_POLY[i][0], yi = NL_POLY[i][1], xj = NL_POLY[j][0], yj = NL_POLY[j][1];
+      if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
   var SRC = {
     lucht: { tpl: 'https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg', max: 21, credit: 'Luchtfoto PDOK', fb: 'esri' },
     brt: { tpl: 'https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png', max: 19, credit: 'Kaart Kadaster/PDOK', fb: 'osm' },
@@ -432,9 +442,11 @@ textarea.inp { resize: vertical; min-height: 64px; }
     return timeoutFetch(PDOK_LS + 'free?rows=5&fq=type:(adres%20OR%20weg%20OR%20woonplaats)&fl=' + PDOK_FL + '&q=' + encodeURIComponent(q), 5000)
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        return ((j.response && j.response.docs) || []).map(function (d) { var pt = pdokPoint(d); return pt && { lat: pt[0], lon: pt[1], label: d.weergavenaam, addr: pdokAddr(d), exact: d.type === 'adres' }; }).filter(Boolean);
+        return ((j.response && j.response.docs) || []).map(function (d) { var pt = pdokPoint(d); return pt && { lat: pt[0], lon: pt[1], label: d.type === 'adres' ? pdokAddr(d) : d.weergavenaam, addr: pdokAddr(d), exact: d.type === 'adres' }; }).filter(Boolean);
       }).catch(function () { return []; })
       .then(function (list) {
+        // staat er een huisnummer in de zoekopdracht, dan eerst de echte adressen
+        if (/\d/.test(q)) list = list.map(function (it, i) { return { it: it, i: i }; }).sort(function (a, b) { return (b.it.exact - a.it.exact) || (a.i - b.i); }).map(function (x) { return x.it; });
         if (list.length) return list;
         return timeoutFetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&accept-language=nl&q=' + encodeURIComponent(q), 8000)
           .then(function (r) { return r.json(); })
@@ -491,6 +503,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       .then(function (j) {
         var d = j.response && j.response.docs && j.response.docs[0]; if (!d) return null;
         var dist = Math.round(+d.afstand || 0);
+        if (dist > 1500) return null;                      // geen adres in de buurt: dan is dit waarschijnlijk geen Nederlandse locatie
         return { addr: pdokAddr(d), note: dist > 40 ? 'Dichtstbijzijnde adres, ongeveer ' + dist + ' m van de pin. Controleer of dit klopt.' : '' };
       }).catch(function () { return null; })
       .then(function (r) { return r || viaOsm(); });

@@ -205,6 +205,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
           <div class="more-in">
             <div class="row"><div class="seg" id="linkmode"><button data-k="pin" aria-pressed="true">Locatie</button><button data-k="route" aria-pressed="false">Route</button></div>
               <span class="hint" style="align-self:center">link in bericht</span></div>
+            <div class="row"><div class="seg" id="regio"><button data-g="omgeving" aria-pressed="true">Omgeving</button><button data-g="gemeente" aria-pressed="false">Gemeente</button></div>
+              <span class="hint" style="align-self:center">regiokaart</span></div>
             <div class="row"><div class="seg" id="range"><button data-r="150" aria-pressed="false">Dichtbij</button><button data-r="400" aria-pressed="true">Midden</button><button data-r="1200" aria-pressed="false">Ruim</button></div>
               <span class="hint" style="align-self:center">bereik</span></div>
             <div class="opts">
@@ -642,8 +644,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function regionPart(lat, lon) {
     var S = 330, nl = inNL(lat, lon);
     return (nl ? Promise.all([gemeenteGeo(lat, lon), gemeenteNaam(lat, lon)]) : Promise.resolve([null, ''])).then(function (r) {
-      var geo = r[0], name = (geo && geo.name) || r[1], clat = lat, clon = lon, rng = 25000;
-      if (geo) {
+      var geo = r[0], name = (geo && geo.name) || r[1], clat = lat, clon = lon, mode = lsGet('locdelen.regio', 'omgeving'), rng = mode === 'omgeving' ? 7000 : 25000;
+      if (geo && mode === 'gemeente') {
         var b = geo.bbox; clat = (b[1] + b[3]) / 2; clon = (b[0] + b[2]) / 2;
         var wm = (b[2] - b[0]) * 111320 * Math.cos(clat * Math.PI / 180), hm = (b[3] - b[1]) * 110540;
         rng = Math.max(6000, Math.min(60000, Math.max(wm, hm) * 1.2));
@@ -654,7 +656,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
         if (!base.ok) return null;
         var cp = worldPx(clat, clon, zf), pp = worldPx(lat, lon, zf);
         var ringsPx = geo ? geo.rings.map(function (rg) { return rg.map(function (q) { var w = worldPx(q[1], q[0], zf); return [S / 2 + w[0] - cp[0], S / 2 + w[1] - cp[1]]; }); }) : null;
-        return { S: S, base: base, rings: ringsPx, dot: [S / 2 + pp[0] - cp[0], S / 2 + pp[1] - cp[1]], name: name };
+        return { S: S, base: base, rings: ringsPx, dot: [S / 2 + pp[0] - cp[0], S / 2 + pp[1] - cp[1]], name: name, fade: mode === 'gemeente' };
       });
     });
   }
@@ -666,7 +668,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     if (R.rings) {
       g.beginPath(); g.rect(-5, -5, S + 10, S + 10);
       R.rings.forEach(function (rg) { rg.forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); });
-      g.fillStyle = 'rgba(255,255,255,.5)'; g.fill('evenodd');
+      if (R.fade) { g.fillStyle = 'rgba(255,255,255,.5)'; g.fill('evenodd'); }
       g.beginPath(); R.rings.forEach(function (rg) { rg.forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); });
       g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 8; g.stroke(); g.strokeStyle = '#76b720'; g.lineWidth = 4.5; g.stroke();
     }
@@ -782,7 +784,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   var pre = { sig: '', promise: null }, preT = 0;
   function imgSig() {
     var v = {}; ['nr', 'name', 'addr', 'plabel', 'myName', 'myPhone', 'myRole'].forEach(function (k) { v[k] = $(k).value; });
-    v.w = $('useWho').checked; v.t = $('usePhone').checked; v.lat = state.lat; v.lon = state.lon; v.r = state.range; v.l = state.layer; v.o = state.opts;
+    v.w = $('useWho').checked; v.t = $('usePhone').checked; v.lat = state.lat; v.lon = state.lon; v.r = state.range; v.l = state.layer; v.o = state.opts; v.g = lsGet('locdelen.regio', 'omgeving');
     return JSON.stringify(v);
   }
   function getImage(force) {
@@ -912,6 +914,9 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function paintLink() { [].forEach.call($('linkmode').children, function (b) { b.setAttribute('aria-pressed', (b.dataset.k === 'route') === linkRoute() ? 'true' : 'false'); }); }
   $('linkmode').onclick = function (e) { var k = e.target.dataset.k; if (!k) return; lsSet('locdelen.link', k); paintLink(); update(); };
   paintLink();
+  function paintRegio() { var m = lsGet('locdelen.regio', 'omgeving'); [].forEach.call($('regio').children, function (b) { b.setAttribute('aria-pressed', b.dataset.g === m ? 'true' : 'false'); }); }
+  $('regio').onclick = function (e) { var k = e.target.dataset.g; if (!k) return; lsSet('locdelen.regio', k); paintRegio(); update(); };
+  paintRegio();
   $('layer').onclick = function (e) { if (e.target.dataset.l) setLayer(e.target.dataset.l); };
   setLayer(lsGet('locdelen.layer', 'sat') === 'map' ? 'map' : 'sat');
   $('go').onclick = lookup;

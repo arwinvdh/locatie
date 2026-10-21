@@ -261,7 +261,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var VERSION = '2026.10.21-b';
+  var VERSION = '2026.10.22-a';
   if (typeof L === 'undefined') {
     var wn = document.createElement('div'); wn.className = 'tip'; wn.style.margin = '1rem'; wn.textContent = 'De kaartbibliotheek is niet geladen. Controleer je verbinding en ververs de pagina.';
     document.body.insertBefore(wn, document.body.firstChild); return;
@@ -293,7 +293,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   var NL = { s: 50.7, n: 53.6, w: 3.2, e: 7.3 };
   function inNL(lat, lon) { return lat >= NL.s && lat <= NL.n && lon >= NL.w && lon <= NL.e; }
   var SRC = {
-    lucht: { tpl: 'https://service.pdok.nl/hwh/luchtfotorijksdienst/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg', max: 19, credit: 'Luchtfoto PDOK', fb: 'esri' },
+    lucht: { tpl: 'https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg', max: 21, credit: 'Luchtfoto PDOK', fb: 'esri' },
     brt: { tpl: 'https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png', max: 19, credit: 'Kaart Kadaster/PDOK', fb: 'osm' },
     esri: { tpl: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', max: 19, credit: 'Esri' },
     osm: { tpl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max: 19, credit: '\u00A9 OpenStreetMap' },
@@ -672,7 +672,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       .then(function (r) { return r.json(); })
       .then(function (j) {
         return ((j.response && j.response.docs) || []).map(function (d) {
-          var pt = pdokPoint(d); var nm = d.woonplaatsnaam || String(d.weergavenaam || '').replace(/^Woonplaats\s+/i, '');
+          var pt = pdokPoint(d); var nm = String(d.woonplaatsnaam || d.weergavenaam || '').replace(/\s+c\.?a\.?$/i, '').trim();   // BAG: 'Bleskensgraaf ca' = cum annexis
           return pt && nm ? { name: nm, lat: pt[0], lon: pt[1], rank: 2, dist: +d.afstand || 0 } : null;
         }).filter(Boolean);
       });
@@ -730,7 +730,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
         if (hit) continue;
         taken.push([x, y, w, h]); shown++;
         g.fillStyle = '#001f38'; g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.beginPath(); g.arc(p.x, p.y, 4, 0, 7); g.fill(); g.stroke();
-        g.fillStyle = 'rgba(255,255,255,.92)'; rrect(g, x, y, w, h, 9); g.fill();
+        g.fillStyle = 'rgba(255,255,255,.97)'; rrect(g, x, y, w, h, 9); g.fill();
         g.fillStyle = '#001f38'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText(p.name, x + 8, y + h - 8);
         return;
       }

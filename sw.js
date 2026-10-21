@@ -1,7 +1,7 @@
 // Service worker: de app opent ook zonder of met slecht bereik.
 // Pagina en manifest: eerst het netwerk (altijd de nieuwste versie), na 4 s of zonder netwerk de bewaarde kopie.
 // Kaartbibliotheek en iconen: uit de cache.
-const CACHE = 'locatie-v2';
+const CACHE = 'locatie-v3';
 const LOCAL = ['./', 'index.html', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 const CDN = [
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',

@@ -42,15 +42,17 @@
 }
 
 * { box-sizing: border-box; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 [hidden] { display: none !important; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--brand-dark); }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 0.9375rem; line-height: 1.4; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .in :focus-visible { outline-offset: -2px; }
 
-/* kopband, zoals Locatie delen */
-.brand { background: var(--brand-dark); color: #fff; border-bottom: 3px solid var(--brand-green); padding: calc(0.75rem + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 0.75rem max(16px, env(safe-area-inset-left, 0px)); }
+/* kopband, zoals Locatie delen: in beide thema's donker, met groene rand */
+.brand { background: var(--brand-dark); color: #fff; border-bottom: 3px solid var(--brand-green); padding-block: 0.75rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .brand .in { max-width: 68rem; margin-inline: auto; display: flex; align-items: center; gap: 0.6rem; }
 .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand-green); flex: none; }
 .brand h1 { margin: 0; font-size: 1.125rem; font-weight: 600; letter-spacing: 0.01em; line-height: 1.2; color: #fff; }
@@ -131,9 +133,8 @@ textarea.inp { resize: none; overflow: hidden; line-height: 1.35; display: block
 .stop.bad:not(.open) .badge { border-color: var(--warn); background: var(--warn); color: var(--surface); }
 .hd .chev { color: var(--ink-2); transition: transform 0.2s; }
 .stop.open .hd .chev { transform: rotate(180deg); }
-.badge { display: grid; place-items: center; min-width: 1.9rem; height: 1.9rem; padding: 0 0.3rem; background: var(--brand-dark); color: #fff; border: 1px solid var(--brand-dark); border-radius: 9px; font-weight: 700; font-size: 0.875rem; font-variant-numeric: tabular-nums; position: relative; touch-action: none; cursor: grab; }
+.badge { display: grid; place-items: center; min-width: 1.9rem; height: 1.9rem; padding: 0 0.3rem; background: var(--accent); color: var(--on-accent); border: 1px solid var(--accent); border-radius: 9px; font-weight: 700; font-size: 0.875rem; font-variant-numeric: tabular-nums; position: relative; touch-action: none; cursor: grab; }
 .badge::after { content: ""; position: absolute; inset: -10px; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .badge { background: var(--accent); border-color: var(--accent); color: var(--on-accent); } }
 .hd { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 #stops.dragging { cursor: grabbing; }
 #stops.dragging .body-wrap, #stops.dragging .more-wrap { transition: none; }
@@ -152,8 +153,6 @@ textarea.inp { resize: none; overflow: hidden; line-height: 1.35; display: block
 .acts button[aria-pressed="true"][data-v="LADEN"] { background: var(--a-laden); }
 .acts button[aria-pressed="true"][data-v="LOSSEN"] { background: var(--a-lossen); }
 .acts button[aria-pressed="true"][data-v="OPHALEN"] { background: var(--a-ophalen); }
-:root:not([data-theme="dark"]) .acts button[aria-pressed="true"] { color: #fff; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .acts button[aria-pressed="true"] { color: var(--on-accent); } }
 
 .r2 { display: grid; gap: 0.5rem; grid-template-columns: minmax(0, 1fr) 6rem 4.5rem; }
 .r4 { display: flex; align-items: center; gap: 0.4rem; }
@@ -200,7 +199,7 @@ textarea.inp { resize: none; overflow: hidden; line-height: 1.35; display: block
 .copy:hover { filter: brightness(1.08); }
 .copy:active { transform: scale(0.97); }
 .copy.ghost { background: var(--surface); color: var(--accent); }
-.copy.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+.copy.done { background: var(--ok); border-color: var(--ok); color: var(--on-accent); }
 
 /* eerdere routes en instellingen */
 .sheet { position: fixed; inset: 0; z-index: 800; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); }
@@ -222,6 +221,7 @@ dialog { border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem; wi
 dialog[open] { display: grid; gap: 0.7rem; animation: rise 0.2s ease both; }
 dialog::backdrop { background: var(--scrim); }
 dialog h2 { margin: 0; font-size: 1.0625rem; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.backup { display: grid; gap: 0.7rem; }
 .set-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
 .toast { position: fixed; left: 50%; bottom: 5.5rem; transform: translateX(-50%); max-width: calc(100vw - 32px); background: var(--ink); color: var(--bg); padding: 0.5rem 0.9rem; border-radius: 10px; z-index: 900; font-size: 0.875rem; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); animation: rise 0.2s ease both; }
@@ -316,12 +316,14 @@ dialog h2 { margin: 0; font-size: 1.0625rem; font-weight: 600; text-transform: n
 <dialog id="settings">
   <h2>Instellingen</h2>
   <p id="sync-note2" class="hint"></p>
-  <div class="set-row">
-    <button id="exp" class="btn sm" type="button">Back-up maken</button>
-    <button id="imp" class="btn sm" type="button">Back-up terugzetten</button>
-    <input id="impf" type="file" accept="application/json" hidden>
+  <div id="backup" class="backup">
+    <div class="set-row">
+      <button id="exp" class="btn sm" type="button">Back-up maken</button>
+      <button id="imp" class="btn sm" type="button">Back-up terugzetten</button>
+      <input id="impf" type="file" accept="application/json" hidden>
+    </div>
+    <p class="hint">Een back-up bevat je eerdere routes en de suggesties voor plaatsen en items.</p>
   </div>
-  <p class="hint">Een back-up bevat je eerdere routes en de suggesties voor plaatsen en items.</p>
   <p id="ver" class="hint"></p>
   <button id="settingsOk" class="btn primary" type="button">Klaar</button>
 </dialog>
@@ -1372,6 +1374,7 @@ function check(stops) {
   $('settingsOk').addEventListener('click', function () { if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); });
   dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
   $('ver').textContent = 'Versie ' + VERSION;
+  if (window.claude && typeof window.claude.use === 'function') $('backup').hidden = true;   /* in de Claude-pagina kan een bestand niet gedownload worden; daar delen de apparaten via de database */
   $('exp').addEventListener('click', function () {
     flushRoute();
     const blob = new Blob([JSON.stringify({ v: 1, t: Date.now(), mem: mem, routes: routes }, null, 2)], { type: 'application/json' });

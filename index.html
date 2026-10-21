@@ -245,6 +245,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     <div class="field"><label for="myRole">Functie</label><input class="inp" id="myRole" placeholder="Uitvoerder" autocomplete="off"></div>
     <div class="field"><label for="myPhone">Telefoon</label><input class="inp" id="myPhone" type="tel" autocomplete="tel"></div>
     <p class="hint">Eenmalig invullen. Blijft alleen op dit apparaat staan.</p>
+    <p class="hint" id="ver"></p>
     <button class="btn primary" id="settingsOk">Klaar</button>
   </dialog>
 </section>
@@ -256,8 +257,13 @@ textarea.inp { resize: vertical; min-height: 64px; }
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
+  var VERSION = '2026.10.21-b';
+  if (typeof L === 'undefined') {
+    var wn = document.createElement('div'); wn.className = 'tip'; wn.style.margin = '1rem'; wn.textContent = 'De kaartbibliotheek is niet geladen. Controleer je verbinding en ververs de pagina.';
+    document.body.insertBefore(wn, document.body.firstChild); return;
+  }
   var lastErr = '';
-  function showErr(m) { m = String(m || '').slice(0, 140); if (!m || m === lastErr) return; lastErr = m; var t = document.getElementById('toast'); if (t) { t.textContent = 'Fout: ' + m; t.hidden = false; setTimeout(function () { t.hidden = true; lastErr = ''; }, 8000); } }
+  function showErr(m) { m = String(m || '').slice(0, 140); if (!m || m === lastErr || /^Script error/i.test(m) || /ResizeObserver/i.test(m)) return; lastErr = m; var t = document.getElementById('toast'); if (t) { t.textContent = 'Fout: ' + m; t.hidden = false; setTimeout(function () { t.hidden = true; lastErr = ''; }, 8000); } }
   window.addEventListener('error', function (e) { showErr(e.message + (e.lineno ? ' (regel ' + e.lineno + ')' : '')); });
   window.addEventListener('unhandledrejection', function (e) { showErr(e.reason && e.reason.message || e.reason); });
   var LS = { draft: 'locdelen.draft', projects: 'locdelen.projects', base: 'locdelen.base', range: 'locdelen.range', share: 'locdelen.share' };
@@ -294,7 +300,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function baseKey() {
     var nl = state.lat == null || inNL(state.lat, state.lon);
     var k = state.layer === 'sat' ? (nl ? 'lucht' : 'esri') : (nl ? 'brt' : 'osm');
-    return state.failed[k] ? SRC[k].fb : k;
+    return state.failed[k] && Date.now() - state.failed[k] < 120000 ? SRC[k].fb : k;
   }
   function mk(key) {
     if (cache[key]) return cache[key];
@@ -306,7 +312,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       l.on('tileload', function () { ok++; });
       l.on('tileerror', function () {
         bad++;
-        if (!ok && bad >= 4 && !state.failed[key]) { state.failed[key] = true; toast('Beeld niet bereikbaar, ander beeld gebruikt'); applyLayers(); }
+        if (!ok && bad >= 4 && !(state.failed[key] && Date.now() - state.failed[key] < 120000)) { state.failed[key] = Date.now(); toast('Beeld niet bereikbaar, ander beeld gebruikt'); applyLayers(); }
       });
     }
     return (cache[key] = l);
@@ -433,7 +439,9 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
   function geocode(q) {
     setStatus('Zoeken...');
+    var tok = state.searchTok;
     return searchPlaces(q).then(function (list) {
+      if (tok !== state.searchTok) return;
       if (!list.length) { setStatus('Niets gevonden. Probeer een ander adres of tik op de kaart.', 'err'); return; }
       if (list.length === 1) { pick(list[0]); return; }
       setStatus('Kies de juiste locatie:');
@@ -511,6 +519,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function lookup() {
     var q = $('q').value.trim();
     if (!q) return;
+    var tok = state.searchTok = (state.searchTok || 0) + 1;
     var c = parseCoords(q);
     if (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Coördinaten herkend. Sleep de pin om te verfijnen.', 'ok'); focusName(); return; }
     if (/^https?:\/\//i.test(q)) {
@@ -518,7 +527,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       if (pt) { setStatus('Adres uit de link opzoeken...'); busy(true); geocode(pt).then(function () { busy(false); }); return; }
       setStatus('Korte link uitzoeken...');
       busy(true);
-      resolveShort(q).then(function (c) { setPoint(c[0], c[1], { reverse: true }); setStatus('Link herkend.', 'ok'); focusName(); })
+      resolveShort(q).then(function (c) { if (tok !== state.searchTok) return; setPoint(c[0], c[1], { reverse: true }); setStatus('Link herkend.', 'ok'); focusName(); })
         .finally(function () { busy(false); })
         .catch(function () { setStatus('Deze korte link kan ik niet openen. Open hem in Google Maps, tik lang op de plek en kopieer de coördinaten, of typ het adres.', 'err'); });
       return;
@@ -539,7 +548,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
 
   /* ---------- bericht ---------- */
   function phoneFmt(t) {
-    var d = String(t).replace(/[^\d]/g, '');
+    var d = String(t).replace(/[^\d]/g, '').replace(/^00/, '');
+    if (/^316\d{8}$/.test(d)) d = '0' + d.slice(2);
     return /^06\d{8}$/.test(d) ? '06-' + d.slice(2) : String(t).trim();
   }
   var FIELDS = ['nr', 'name', 'addr', 'note', 'via', 'arrive', 'plabel'];
@@ -590,9 +600,15 @@ textarea.inp { resize: vertical; min-height: 64px; }
   }
 
   /* ---------- afbeelding ---------- */
+  var tileCache = new Map();
   function loadTile(u) {
+    if (tileCache.has(u)) return tileCache.get(u);
     // een tegel die nooit antwoordt mag de hele afbeelding niet blokkeren
-    return new Promise(function (res) { var im = new Image(), done = false, fin = function (v) { if (!done) { done = true; clearTimeout(tm); res(v); } }, tm = setTimeout(function () { fin(null); }, 6000); im.crossOrigin = 'anonymous'; im.onload = function () { fin(im); }; im.onerror = function () { fin(null); }; im.src = u; });
+    var pr = new Promise(function (res) { var im = new Image(), done = false, fin = function (v) { if (!done) { done = true; clearTimeout(tm); res(v); } }, tm = setTimeout(function () { fin(null); }, 6000); im.crossOrigin = 'anonymous'; im.onload = function () { fin(im); }; im.onerror = function () { fin(null); }; im.src = u; });
+    tileCache.set(u, pr);
+    pr.then(function (v) { if (!v) tileCache.delete(u); });           // mislukte tegels opnieuw proberen
+    if (tileCache.size > 320) tileCache.delete(tileCache.keys().next().value);
+    return pr;
   }
   function tileUrl(S, z, x, y) {
     if (S.wms) {
@@ -646,20 +662,30 @@ textarea.inp { resize: vertical; min-height: 64px; }
     var sc = 256 * Math.pow(2, zf), sl = Math.sin(lat * Math.PI / 180);
     return [(lon + 180) / 360 * sc, (0.5 - Math.log((1 + sl) / (1 - sl)) / (4 * Math.PI)) * sc];
   }
-  // plaatsen rond de pin: steden, dorpen (OpenStreetMap via Overpass, gratis); bij een fout geen labels
-  function placesAround(lat, lon, radius) {
-    var q = '[out:json][timeout:8];node(around:' + radius + ',' + lat + ',' + lon + ')[place~"^(city|town|village)$"][name];out 60;';
-    var hosts = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-    var cap = new Promise(function (res) { setTimeout(function () { res([]); }, 4000); });
-    var fetchAll = hosts.reduce(function (pr, h) {
-      return pr.catch(function () {
-        return timeoutFetch(h + '?data=' + encodeURIComponent(q), 3500).then(function (r) { return r.json(); }).then(function (j) {
-          if (!j || !j.elements) throw new Error('leeg');
-          return j.elements.map(function (e) { return { name: e.tags.name, lat: e.lat, lon: e.lon, rank: { city: 3, town: 2, village: 1 }[e.tags.place] || 0, pop: +e.tags.population || 0 }; });
-        });
+  // plaatsen rond de pin. NL: PDOK Locatieserver (woonplaatsen, dichtstbijzijnde eerst). Anders of bij een fout: OpenStreetMap (Overpass). Nooit langer dan 5 s.
+  function placesPdok(lat, lon, radius) {
+    return timeoutFetch(PDOK_LS + 'reverse?type=woonplaats&rows=10&distance=' + radius + '&lat=' + lat + '&lon=' + lon + '&fl=woonplaatsnaam,weergavenaam,centroide_ll,afstand', 3500)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        return ((j.response && j.response.docs) || []).map(function (d) {
+          var pt = pdokPoint(d); var nm = d.woonplaatsnaam || String(d.weergavenaam || '').replace(/^Woonplaats\s+/i, '');
+          return pt && nm ? { name: nm, lat: pt[0], lon: pt[1], rank: 2, dist: +d.afstand || 0 } : null;
+        }).filter(Boolean);
       });
-    }, Promise.reject()).catch(function () { return []; });
-    return Promise.race([fetchAll, cap]);
+  }
+  function placesOsm(lat, lon, radius) {
+    var q = '[out:json][timeout:8];node(around:' + radius + ',' + lat + ',' + lon + ')[place~"^(city|town|village)$"][name];out 60;';
+    return timeoutFetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q), 3500).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.elements) throw new Error('leeg');
+      return j.elements.filter(function (e) { return e.tags && e.tags.name && isFinite(e.lat) && isFinite(e.lon); })
+        .map(function (e) { return { name: e.tags.name, lat: +e.lat, lon: +e.lon, rank: { city: 3, town: 2, village: 1 }[e.tags.place] || 1, pop: +e.tags.population || 0 }; });
+    });
+  }
+  function placesAround(lat, lon, radius) {
+    var cap = new Promise(function (res) { setTimeout(function () { res([]); }, 5000); });
+    var chain = (inNL(lat, lon) ? placesPdok(lat, lon, radius).catch(function () { return []; }) : Promise.resolve([]))
+      .then(function (l) { return l.length >= 2 ? l : placesOsm(lat, lon, radius).catch(function () { return l; }); });
+    return Promise.race([chain, cap]);
   }
   function regionPart(lat, lon) {
     var S = 330, nl = inNL(lat, lon);
@@ -679,14 +705,14 @@ textarea.inp { resize: vertical; min-height: 64px; }
         if (!base.ok) return null;
         var cp = worldPx(clat, clon, zf), pp = worldPx(lat, lon, zf);
         var ringsPx = geo ? geo.rings.map(function (rg) { return rg.map(function (q) { var w = worldPx(q[1], q[0], zf); return [S / 2 + w[0] - cp[0], S / 2 + w[1] - cp[1]]; }); }) : null;
-        return { S: S, base: base, rings: ringsPx, dot: [S / 2 + pp[0] - cp[0], S / 2 + pp[1] - cp[1]], name: name, fade: mode === 'gemeente', places: places.map(function (pl) { var w = worldPx(pl.lat, pl.lon, zf); return { name: pl.name, rank: pl.rank, pop: pl.pop, x: S / 2 + w[0] - cp[0], y: S / 2 + w[1] - cp[1] }; }) };
+        return { S: S, base: base, rings: ringsPx, dot: [S / 2 + pp[0] - cp[0], S / 2 + pp[1] - cp[1]], name: name, fade: mode === 'gemeente', places: places.map(function (pl) { var w = worldPx(pl.lat, pl.lon, zf); return { name: pl.name, rank: pl.rank, pop: pl.pop || 0, dist: pl.dist || 0, x: S / 2 + w[0] - cp[0], y: S / 2 + w[1] - cp[1] }; }) };
       });
     });
   }
   function drawPlaces(g, R) {
     var S = R.S, taken = [[R.dot[0] - 24, R.dot[1] - 24, 48, 48]], font = { 3: '700 21px', 2: '700 19px', 1: '600 17px' };
     var list = R.places.filter(function (p) { return p.x > 4 && p.x < S - 4 && p.y > 4 && p.y < S - 4; })
-      .sort(function (a, b) { return b.rank - a.rank || b.pop - a.pop; });
+      .sort(function (a, b) { return b.rank - a.rank || b.pop - a.pop || a.dist - b.dist; });
     var shown = 0, h = 28;
     list.forEach(function (p) {
       if (shown >= 9) return;
@@ -705,6 +731,15 @@ textarea.inp { resize: vertical; min-height: 64px; }
         return;
       }
     });
+  }
+  // noordpijl in dezelfde stijl als het kaartje: witte rand met schaduw, afronding 18, AW-blauw met groene pijl
+  function drawNorth(g, x0, y0, S) {
+    var rad = 18, cx = x0 + S / 2;
+    g.save(); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 14; g.shadowOffsetY = 4; g.fillStyle = '#fff'; rrect(g, x0 - 5, y0 - 5, S + 10, S + 10, rad + 4); g.fill(); g.restore();
+    g.save(); rrect(g, x0, y0, S, S, rad); g.clip(); g.fillStyle = '#001f38'; g.fillRect(x0, y0, S, S);
+    g.fillStyle = '#76b720'; g.beginPath(); g.moveTo(cx, y0 + 11); g.lineTo(cx + 15, y0 + 52); g.lineTo(cx, y0 + 43); g.lineTo(cx - 15, y0 + 52); g.closePath(); g.fill();
+    g.fillStyle = '#fff'; g.font = '700 22px Avenir Next, Avenir, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText('N', cx, y0 + S - 12);
+    g.restore();
   }
   function drawRegion(g, R, x0, y0) {
     var S = R.S, rad = 18;
@@ -764,10 +799,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       }
       // regiokaart linksboven, noordpijl rechtsboven
       if (region) { try { drawRegion(g, region, 60, 60); } catch (e) { region.places = []; } [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); if (region.places && region.places.length && credits.indexOf('\u00A9 OpenStreetMap') < 0) credits.push('\u00A9 OpenStreetMap'); }
-      var nx = W - 100, ny = 100;
-      g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.arc(nx, ny, 40, 0, 7); g.fill();
-      g.fillStyle = '#111'; g.beginPath(); g.moveTo(nx, ny - 26); g.lineTo(nx + 11, ny + 8); g.lineTo(nx, ny + 2); g.lineTo(nx - 11, ny + 8); g.closePath(); g.fill();
-      g.font = '700 20px Avenir Next, Avenir, system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('N', nx, ny + 30);
+      drawNorth(g, W - 60 - 88, 60, 88);
       // onderbalk
       var BH = 250, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();
       var who = $('useWho').checked ? $('myName').value.trim() : '', tel = $('usePhone').checked ? phoneFmt($('myPhone').value) : '';
@@ -796,10 +828,10 @@ textarea.inp { resize: vertical; min-height: 64px; }
       var ay = [r3, r4];
       (addr ? addrLines(addr).reduce(function (acc, l) { return acc.concat(wrap(g, l, lw, 1)); }, []) : [fmt(lat) + ', ' + fmt(lon)]).slice(0, 2).forEach(function (ln, k) { g.fillText(ln, PAD, ay[k]); });
       g.font = '14px Avenir Next, Avenir, system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.5)'; g.textAlign = 'right';
-      g.fillText(credits.join(' \u00B7 '), W - 14, H - 8);
+      g.fillText(credits.join(' \u00B7 '), W - 64, H - 14);
       // witte rand met schaduw. Gemeten in een iOS-screenshot: WhatsApp zet ~6,9% van de breedte als buitenradius en snijdt ~2,4% per zijde af,
       // dus de zichtbare rand is ~27px. Boven: binnenradius concentrisch (buiten - rand). Onder: klein, want WhatsApp laat daar met bijschrift een rechte rand.
-      var M = 56, WA_R = Math.round((W + 2 * M) * 0.069), RT = Math.max(10, WA_R - 27), RB = 14, out = document.createElement('canvas'); out.width = W + 2 * M; out.height = H + 2 * M;
+      var M = 56, WA_R = Math.round((W + 2 * M) * 0.069), RT = Math.max(10, WA_R - 27), RB = RT, out = document.createElement('canvas'); out.width = W + 2 * M; out.height = H + 2 * M;
       var o2 = out.getContext('2d');
       o2.fillStyle = '#fff'; o2.fillRect(0, 0, out.width, out.height);
       o2.save(); o2.shadowColor = 'rgba(0,31,56,.32)'; o2.shadowBlur = 30; o2.shadowOffsetY = 10; o2.fillStyle = '#fff';
@@ -837,18 +869,18 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function getImage(force) {
     var sig = imgSig();
     if (!force && pre.promise && pre.sig === sig) return pre.promise;
-    pre.sig = sig;
+    pre.sig = sig; pre.busy = true;
     pre.promise = Promise.race([buildImage(), new Promise(function (res, rej) { setTimeout(function () { rej(new Error('te traag')); }, 30000); })]);
-    pre.promise.catch(function () { if (pre.sig === sig) pre.promise = null; });
+    pre.promise.catch(function () { if (pre.sig === sig) pre.promise = null; }).then(function () { pre.busy = false; });
     return pre.promise;
   }
   function schedulePrebuild() {
     clearTimeout(preT);
     if (state.lat == null) return;
-    preT = setTimeout(function () { if (!document.hidden && state.lat != null && pre.sig !== imgSig()) getImage().catch(function () {}); }, 1500);
+    preT = setTimeout(function () { if (document.hidden || state.lat == null || pre.sig === imgSig()) return; if (pre.busy) { schedulePrebuild(); return; } getImage().catch(function () {}); }, 2500);
   }
   function fallbackSave(blob, name, msg, text) {
-    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 15000);
     copyText(msg); saveProject(true); toast(text);
   }
   var warned = '';
@@ -953,7 +985,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   if (validLL(parseFloat(params.get('lat')), parseFloat(params.get('lon'))) && params.get('lat') !== null) { startViewer(params); return; }
 
   initMap($('map'), false);
-  map.on('click', function (e) { setPoint(e.latlng.lat, e.latlng.lng, { reverse: true, keepView: true }); setStatus('Pin geplaatst. Sleep om te verfijnen.', 'ok'); });
+  map.on('click', function (e) { state.searchTok = (state.searchTok || 0) + 1; setPoint(e.latlng.lat, e.latlng.lng, { reverse: true, keepView: true }); setStatus('Pin geplaatst. Sleep om te verfijnen.', 'ok'); });
   Object.keys(OPT_DEF).forEach(function (k) {
     var el = $('opt' + k.charAt(0).toUpperCase() + k.slice(1));
     el.checked = state.opts[k];
@@ -1062,6 +1094,11 @@ textarea.inp { resize: vertical; min-height: 64px; }
   var standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   if (ios && !standalone && lsGet('locdelen.tipX', '0') !== '1') $('tip').hidden = false;
   $('tipX').onclick = function () { lsSet('locdelen.tipX', '1'); $('tip').hidden = true; };
+  var rsT = 0;
+  window.addEventListener('resize', function () { clearTimeout(rsT); rsT = setTimeout(function () { if (map) map.invalidateSize(); }, 200); });
+  window.addEventListener('online', function () { state.failed = {}; applyLayers(); toast('Weer online'); });
+  $('ver').textContent = 'Versie ' + VERSION;
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(function () {});
   renderP(); update();
 })();
 </script>

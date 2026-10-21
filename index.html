@@ -261,7 +261,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var VERSION = '2026.10.22-a';
+  var VERSION = '2026.10.22-b';
   if (typeof L === 'undefined') {
     var wn = document.createElement('div'); wn.className = 'tip'; wn.style.margin = '1rem'; wn.textContent = 'De kaartbibliotheek is niet geladen. Controleer je verbinding en ververs de pagina.';
     document.body.insertBefore(wn, document.body.firstChild); return;
@@ -679,31 +679,6 @@ textarea.inp { resize: vertical; min-height: 64px; }
     var sc = 256 * Math.pow(2, zf), sl = Math.sin(lat * Math.PI / 180);
     return [(lon + 180) / 360 * sc, (0.5 - Math.log((1 + sl) / (1 - sl)) / (4 * Math.PI)) * sc];
   }
-  // plaatsen rond de pin. NL: PDOK Locatieserver (woonplaatsen, dichtstbijzijnde eerst). Anders of bij een fout: OpenStreetMap (Overpass). Nooit langer dan 5 s.
-  function placesPdok(lat, lon, radius) {
-    return timeoutFetch(PDOK_LS + 'reverse?type=woonplaats&rows=10&distance=' + radius + '&lat=' + lat + '&lon=' + lon + '&fl=woonplaatsnaam,weergavenaam,centroide_ll,afstand', 3500)
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        return ((j.response && j.response.docs) || []).map(function (d) {
-          var pt = pdokPoint(d); var nm = String(d.woonplaatsnaam || d.weergavenaam || '').replace(/\s+c\.?a\.?$/i, '').trim();   // BAG: 'Bleskensgraaf ca' = cum annexis
-          return pt && nm ? { name: nm, lat: pt[0], lon: pt[1], rank: 2, dist: +d.afstand || 0 } : null;
-        }).filter(Boolean);
-      });
-  }
-  function placesOsm(lat, lon, radius) {
-    var q = '[out:json][timeout:8];node(around:' + radius + ',' + lat + ',' + lon + ')[place~"^(city|town|village)$"][name];out 60;';
-    return timeoutFetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q), 3500).then(function (r) { return r.json(); }).then(function (j) {
-      if (!j || !j.elements) throw new Error('leeg');
-      return j.elements.filter(function (e) { return e.tags && e.tags.name && isFinite(e.lat) && isFinite(e.lon); })
-        .map(function (e) { return { name: e.tags.name, lat: +e.lat, lon: +e.lon, rank: { city: 3, town: 2, village: 1 }[e.tags.place] || 1, pop: +e.tags.population || 0 }; });
-    });
-  }
-  function placesAround(lat, lon, radius) {
-    var cap = new Promise(function (res) { setTimeout(function () { res([]); }, 5000); });
-    var chain = (inNL(lat, lon) ? placesPdok(lat, lon, radius).catch(function () { return []; }) : Promise.resolve([]))
-      .then(function (l) { return l.length >= 2 ? l : placesOsm(lat, lon, radius).catch(function () { return l; }); });
-    return Promise.race([chain, cap]);
-  }
   function regionPart(lat, lon) {
     var S = 330, nl = inNL(lat, lon);
     var mode = lsGet('locdelen.regio', 'omgeving');
@@ -716,37 +691,12 @@ textarea.inp { resize: vertical; min-height: 64px; }
       }
       var zf = Math.log(156543.03392 * Math.cos(clat * Math.PI / 180) / (rng / S)) / Math.LN2;
       var c = { W: S, H: S, lat: clat, lon: clon, zf: zf }, bk = nl ? 'brt' : 'osm';
-      var placesP = mode === 'omgeving' ? placesAround(lat, lon, Math.round(rng * 0.75)) : Promise.resolve([]);
-      return Promise.all([loadLayer(bk, c).then(function (b) { return !b.ok && SRC[bk].fb ? loadLayer(SRC[bk].fb, c) : b; }), placesP]).then(function (both) {
-        var base = both[0], places = both[1];
+      return loadLayer(bk, c).then(function (b) { return !b.ok && SRC[bk].fb ? loadLayer(SRC[bk].fb, c) : b; }).then(function (base) {
         if (!base.ok) return null;
         var cp = worldPx(clat, clon, zf), pp = worldPx(lat, lon, zf);
         var ringsPx = geo ? geo.rings.map(function (rg) { return rg.map(function (q) { var w = worldPx(q[1], q[0], zf); return [S / 2 + w[0] - cp[0], S / 2 + w[1] - cp[1]]; }); }) : null;
-        return { S: S, base: base, rings: ringsPx, dot: [S / 2 + pp[0] - cp[0], S / 2 + pp[1] - cp[1]], name: name, fade: mode === 'gemeente', places: places.map(function (pl) { var w = worldPx(pl.lat, pl.lon, zf); return { name: pl.name, rank: pl.rank, pop: pl.pop || 0, dist: pl.dist || 0, x: S / 2 + w[0] - cp[0], y: S / 2 + w[1] - cp[1] }; }) };
+        return { S: S, base: base, rings: ringsPx, dot: [S / 2 + pp[0] - cp[0], S / 2 + pp[1] - cp[1]], name: name, fade: mode === 'gemeente' };
       });
-    });
-  }
-  function drawPlaces(g, R) {
-    var S = R.S, taken = [[R.dot[0] - 24, R.dot[1] - 24, 48, 48]], font = { 3: '700 21px', 2: '700 19px', 1: '600 17px' };
-    var list = R.places.filter(function (p) { return p.x > 4 && p.x < S - 4 && p.y > 4 && p.y < S - 4; })
-      .sort(function (a, b) { return b.rank - a.rank || b.pop - a.pop || a.dist - b.dist; });
-    var shown = 0, h = 28;
-    list.forEach(function (p) {
-      if (shown >= 9) return;
-      g.font = (font[p.rank] || font[1]) + ' Avenir Next, Avenir, system-ui, sans-serif';
-      var w = g.measureText(p.name).width + 16;
-      // eerst op de plek zelf, anders eromheen schuiven tot er ruimte is
-      var cand = [[0, 0], [0, -h - 4], [0, h + 4], [w / 2 + 8, 0], [-w / 2 - 8, 0], [w / 2, -h - 4], [-w / 2, -h - 4], [w / 2, h + 4], [-w / 2, h + 4]];
-      for (var c = 0; c < cand.length; c++) {
-        var x = Math.max(6, Math.min(S - w - 6, p.x - w / 2 + cand[c][0])), y = Math.max(6, Math.min(S - h - 6, p.y - h / 2 + cand[c][1])), hit = false;
-        for (var i = 0; i < taken.length; i++) { var t = taken[i]; if (x < t[0] + t[2] + 3 && x + w > t[0] - 3 && y < t[1] + t[3] + 3 && y + h > t[1] - 3) { hit = true; break; } }
-        if (hit) continue;
-        taken.push([x, y, w, h]); shown++;
-        g.fillStyle = '#001f38'; g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.beginPath(); g.arc(p.x, p.y, 4, 0, 7); g.fill(); g.stroke();
-        g.fillStyle = 'rgba(255,255,255,.97)'; rrect(g, x, y, w, h, 9); g.fill();
-        g.fillStyle = '#001f38'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText(p.name, x + 8, y + h - 8);
-        return;
-      }
     });
   }
   // noordpijl in dezelfde stijl als het kaartje: witte rand met schaduw, afronding 18, AW-blauw met groene pijl
@@ -770,7 +720,6 @@ textarea.inp { resize: vertical; min-height: 64px; }
       g.beginPath(); R.rings.forEach(function (rg) { rg.forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); });
       g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 8; g.stroke(); g.strokeStyle = '#76b720'; g.lineWidth = 4.5; g.stroke();
     }
-    if (R.places && R.places.length) drawPlaces(g, R);
     var d = R.dot;
     g.fillStyle = 'rgba(1,73,131,.28)'; g.beginPath(); g.arc(d[0], d[1], 26, 0, 7); g.fill();
     g.fillStyle = '#014983'; g.strokeStyle = '#fff'; g.lineWidth = 4.5; g.beginPath(); g.arc(d[0], d[1], 11, 0, 7); g.fill(); g.stroke();
@@ -815,7 +764,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
         g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText(pl, px + pw / 2, py + 33);
       }
       // regiokaart linksboven, noordpijl rechtsboven
-      if (region) { try { drawRegion(g, region, 60, 60); } catch (e) { region.places = []; } [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); if (region.places && region.places.length && credits.indexOf('\u00A9 OpenStreetMap') < 0) credits.push('\u00A9 OpenStreetMap'); }
+      if (region) { try { drawRegion(g, region, 60, 60); } catch (e) {} [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); }
       drawNorth(g, W - 60 - 88, 60, 88);
       // onderbalk
       var BH = 250, nr = $('nr').value.trim(), nm = $('name').value.trim(), addr = $('addr').value.trim();

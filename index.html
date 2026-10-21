@@ -256,6 +256,10 @@ textarea.inp { resize: vertical; min-height: 64px; }
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
+  var lastErr = '';
+  function showErr(m) { m = String(m || '').slice(0, 140); if (!m || m === lastErr) return; lastErr = m; var t = document.getElementById('toast'); if (t) { t.textContent = 'Fout: ' + m; t.hidden = false; setTimeout(function () { t.hidden = true; lastErr = ''; }, 8000); } }
+  window.addEventListener('error', function (e) { showErr(e.message + (e.lineno ? ' (regel ' + e.lineno + ')' : '')); });
+  window.addEventListener('unhandledrejection', function (e) { showErr(e.reason && e.reason.message || e.reason); });
   var LS = { draft: 'locdelen.draft', projects: 'locdelen.projects', base: 'locdelen.base', range: 'locdelen.range', share: 'locdelen.share' };
   function lsGet(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -645,14 +649,16 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function placesAround(lat, lon, radius) {
     var q = '[out:json][timeout:8];node(around:' + radius + ',' + lat + ',' + lon + ')[place~"^(city|town|village)$"][name];out 60;';
     var hosts = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-    return hosts.reduce(function (pr, h) {
+    var cap = new Promise(function (res) { setTimeout(function () { res([]); }, 4000); });
+    var fetchAll = hosts.reduce(function (pr, h) {
       return pr.catch(function () {
-        return timeoutFetch(h + '?data=' + encodeURIComponent(q), 7000).then(function (r) { return r.json(); }).then(function (j) {
+        return timeoutFetch(h + '?data=' + encodeURIComponent(q), 3500).then(function (r) { return r.json(); }).then(function (j) {
           if (!j || !j.elements) throw new Error('leeg');
           return j.elements.map(function (e) { return { name: e.tags.name, lat: e.lat, lon: e.lon, rank: { city: 3, town: 2, village: 1 }[e.tags.place] || 0, pop: +e.tags.population || 0 }; });
         });
       });
     }, Promise.reject()).catch(function () { return []; });
+    return Promise.race([fetchAll, cap]);
   }
   function regionPart(lat, lon) {
     var S = 330, nl = inNL(lat, lon);
@@ -736,7 +742,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       var extra = [];
       if (state.layer === 'sat' && o.labels) extra.push(loadLayer('labels', c));
       if (o.parcel) extra.push(loadLayer('parcel', c));
-      return Promise.all(extra.concat([o.mini ? regionPart(lat, lon) : null])).then(function (ex) { var rg = ex.pop(); return [[base].concat(ex), rg]; });
+      return Promise.all(extra.concat([o.mini ? regionPart(lat, lon).catch(function () { return null; }) : null])).then(function (ex) { var rg = ex.pop(); return [[base].concat(ex), rg]; });
     }).then(function (pr) {
       var ls = pr[0], region = pr[1];
       var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var g = cv.getContext('2d');
@@ -756,7 +762,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
         g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText(pl, px + pw / 2, py + 33);
       }
       // regiokaart linksboven, noordpijl rechtsboven
-      if (region) { drawRegion(g, region, 60, 60); [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); if (region.places && region.places.length && credits.indexOf('\u00A9 OpenStreetMap') < 0) credits.push('\u00A9 OpenStreetMap'); }
+      if (region) { try { drawRegion(g, region, 60, 60); } catch (e) { region.places = []; } [region.base].forEach(function (l) { if (l && l.ok) { var t = SRC[l.key].credit; if (credits.indexOf(t) < 0) credits.push(t); } }); if (region.places && region.places.length && credits.indexOf('\u00A9 OpenStreetMap') < 0) credits.push('\u00A9 OpenStreetMap'); }
       var nx = W - 100, ny = 100;
       g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.arc(nx, ny, 40, 0, 7); g.fill();
       g.fillStyle = '#111'; g.beginPath(); g.moveTo(nx, ny - 26); g.lineTo(nx + 11, ny + 8); g.lineTo(nx, ny + 2); g.lineTo(nx - 11, ny + 8); g.closePath(); g.fill();

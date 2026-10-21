@@ -591,7 +591,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
 
   /* ---------- afbeelding ---------- */
   function loadTile(u) {
-    return new Promise(function (res) { var im = new Image(); im.crossOrigin = 'anonymous'; im.onload = function () { res(im); }; im.onerror = function () { res(null); }; im.src = u; });
+    // een tegel die nooit antwoordt mag de hele afbeelding niet blokkeren
+    return new Promise(function (res) { var im = new Image(), done = false, fin = function (v) { if (!done) { done = true; clearTimeout(tm); res(v); } }, tm = setTimeout(function () { fin(null); }, 6000); im.crossOrigin = 'anonymous'; im.onload = function () { fin(im); }; im.onerror = function () { fin(null); }; im.src = u; });
   }
   function tileUrl(S, z, x, y) {
     if (S.wms) {
@@ -836,7 +837,8 @@ textarea.inp { resize: vertical; min-height: 64px; }
   function getImage(force) {
     var sig = imgSig();
     if (!force && pre.promise && pre.sig === sig) return pre.promise;
-    pre.sig = sig; pre.promise = buildImage();
+    pre.sig = sig;
+    pre.promise = Promise.race([buildImage(), new Promise(function (res, rej) { setTimeout(function () { rej(new Error('te traag')); }, 30000); })]);
     pre.promise.catch(function () { if (pre.sig === sig) pre.promise = null; });
     return pre.promise;
   }

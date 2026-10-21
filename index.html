@@ -43,6 +43,9 @@ h1 { margin: 0; font-size: 1.125rem; font-weight: 600; }
 .tip { display: flex; gap: .75rem; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding: .6rem .75rem; border: 1px solid var(--brand-green); border-radius: 12px; background: color-mix(in srgb, var(--brand-green) 12%, var(--surface)); font-size: .875rem; }
 .warnlink { border: 0; background: none; padding: 0; text-align: left; color: var(--warn); font: inherit; font-size: .8125rem; text-decoration: underline; cursor: pointer; }
 .addr-note { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: -.2rem; }
+#img { grid-column: 1 / -1; }
+@media (max-width: 47.999rem) { .toast { bottom: 9.5rem; } .wrap { padding-bottom: 9.5rem; } }
+@media (min-width: 48rem) { .bar .in { grid-template-columns: 2fr 1fr 1fr 1fr; } #img { grid-column: auto; } }
 .map-hint { position: absolute; inset: 0; z-index: 800; display: grid; place-items: center; padding: 1rem; text-align: center; background: rgba(0,31,56,.55); color: #fff; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .2s; }
 .map-hint.on { opacity: 1; }
 .more-sum { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--accent); font-size: .875rem; font-weight: 600; }
@@ -99,7 +102,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 .nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
 .vtitle { font-size: 1.25rem; font-weight: 600; margin: 0; }
 .bar { position: fixed; inset: auto 0 0; padding: .6rem max(16px, env(safe-area-inset-right)) calc(.6rem + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: var(--bg); border-top: 1px solid var(--line); z-index: 500; }
-.bar .in { max-width: 64rem; margin-inline: auto; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: .4rem; }
+.bar .in { max-width: 64rem; margin-inline: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes drop { 0% { transform: translateY(-40px) rotate(-45deg); opacity: 0; } 60% { transform: translateY(4px) rotate(-45deg); opacity: 1; } 100% { transform: rotate(-45deg); } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -235,6 +238,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 
   <div class="bar"><div class="in">
     <button class="btn primary" id="img" disabled title="Ctrl/Cmd + Enter">Deel afbeelding</button>
+    <button class="btn" id="dl" disabled title="Alleen de afbeelding opslaan">Download</button>
     <button class="btn" id="wa" disabled>Tekst</button>
     <button class="btn" id="copy" disabled title="Ctrl/Cmd + Shift + C">Kopieer</button>
   </div></div>
@@ -588,7 +592,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     saveDraft(); schedulePrebuild();
     var m = message(), has = state.lat != null;
     $('preview').innerHTML = has ? esc(m).replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\*([^*\n]+)\*/g, '<b>$1</b>') : '<span class="hint">Het bericht verschijnt hier zodra je een locatie hebt.</span>';
-    ['copy', 'wa', 'img'].forEach(function (id) { $(id).disabled = !has; });
+    ['copy', 'wa', 'img', 'dl'].forEach(function (id) { $(id).disabled = !has; });
     var miss = []; if ($('useWho').checked && !$('myName').value.trim()) miss.push('naam'); if ($('usePhone').checked && !$('myPhone').value.trim()) miss.push('telefoonnummer');
     $('whoWarn').hidden = !miss.length; $('whoWarn').textContent = miss.length ? 'Je ' + miss.join(' en ') + ' ontbreekt in het bericht. Tik om in te vullen.' : '';
   }
@@ -884,6 +888,22 @@ textarea.inp { resize: vertical; min-height: 64px; }
     copyText(msg); saveProject(true); toast(text);
   }
   var warned = '';
+  function fileBase() { return (label() || 'locatie').replace(/[^\w\-]+/g, '_'); }
+  // alleen de afbeelding opslaan: geen deelmenu, geen bericht naar het klembord
+  function downloadImage() {
+    var b = $('dl'); b.disabled = true; b.textContent = 'Bezig...';
+    var sig = imgSig();
+    getImage().then(function (res) {
+      if (res.incomplete && warned !== sig) {
+        warned = sig; pre.promise = null;
+        toast('Kaart is niet helemaal geladen. Tik nogmaals om toch te downloaden.'); return;
+      }
+      var a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = fileBase() + '.jpg';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 15000);
+      saveProject(true); toast('Afbeelding gedownload');
+    }).catch(function () { pre.promise = null; toast('Kaart niet bereikbaar. Controleer je verbinding en probeer opnieuw.'); })
+      .finally(function () { b.textContent = 'Download'; update(); });
+  }
   function shareImage() {
     var b = $('img'); b.disabled = true; b.textContent = 'Bezig...';
     var msg = message(), sig = imgSig();
@@ -1054,6 +1074,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
   $('copy').onclick = function () { copyText(message()).then(function () { afterSend('Gekopieerd'); }); };
   $('wa').onclick = function () { window.open('https://wa.me/?text=' + encodeURIComponent(message()), '_blank'); saveProject(true); };
   $('img').onclick = shareImage;
+  $('dl').onclick = downloadImage;
   $('new').onclick = resetAll;
   $('paste').onclick = function () {
     if (!navigator.clipboard || !navigator.clipboard.readText) { $('q').focus(); setStatus('Plakken kan hier niet automatisch. Houd het veld ingedrukt en kies Plak.', 'err'); return; }

@@ -261,7 +261,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var VERSION = '2026.10.22-b';
+  var VERSION = '2026.10.22-c';
   if (typeof L === 'undefined') {
     var wn = document.createElement('div'); wn.className = 'tip'; wn.style.margin = '1rem'; wn.textContent = 'De kaartbibliotheek is niet geladen. Controleer je verbinding en ververs de pagina.';
     document.body.insertBefore(wn, document.body.firstChild); return;
@@ -699,13 +699,14 @@ textarea.inp { resize: vertical; min-height: 64px; }
       });
     });
   }
-  // noordpijl in dezelfde stijl als het kaartje: witte rand met schaduw, afronding 18, AW-blauw met groene pijl
+  // noordpijl in dezelfde stijl als het kaartje: witte rand met schaduw, afronding 18, lichte kaartkleur, AW-blauw
   function drawNorth(g, x0, y0, S) {
     var rad = 18, cx = x0 + S / 2;
     g.save(); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 14; g.shadowOffsetY = 4; g.fillStyle = '#fff'; rrect(g, x0 - 5, y0 - 5, S + 10, S + 10, rad + 4); g.fill(); g.restore();
-    g.save(); rrect(g, x0, y0, S, S, rad); g.clip(); g.fillStyle = '#001f38'; g.fillRect(x0, y0, S, S);
-    g.fillStyle = '#76b720'; g.beginPath(); g.moveTo(cx, y0 + 11); g.lineTo(cx + 15, y0 + 52); g.lineTo(cx, y0 + 43); g.lineTo(cx - 15, y0 + 52); g.closePath(); g.fill();
-    g.fillStyle = '#fff'; g.font = '700 22px Avenir Next, Avenir, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText('N', cx, y0 + S - 12);
+    g.save(); rrect(g, x0, y0, S, S, rad); g.clip(); g.fillStyle = '#eef2f6'; g.fillRect(x0, y0, S, S);
+    g.fillStyle = '#014983'; g.beginPath(); g.moveTo(cx, y0 + 11); g.lineTo(cx - 15, y0 + 52); g.lineTo(cx, y0 + 43); g.closePath(); g.fill();
+    g.fillStyle = '#001f38'; g.beginPath(); g.moveTo(cx, y0 + 11); g.lineTo(cx + 15, y0 + 52); g.lineTo(cx, y0 + 43); g.closePath(); g.fill();
+    g.fillStyle = '#001f38'; g.font = '700 22px Avenir Next, Avenir, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText('N', cx, y0 + S - 12);
     g.restore();
   }
   function drawRegion(g, R, x0, y0) {

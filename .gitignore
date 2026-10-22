@@ -1,0 +1,7 @@
+# gegenereerd
+route-artifact.html
+# systeem en editors
+.DS_Store
+Thumbs.db
+*.swp
+node_modules/

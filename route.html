@@ -8,12 +8,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Route">
 <link rel="manifest" href="route.webmanifest">
-<link rel="apple-touch-icon" href="route-icon-180.png">
-<link rel="icon" type="image/png" href="route-icon-192.png"><!--/PWA-->
+<link rel="apple-touch-icon" href="icons/route-icon-180.png">
+<link rel="icon" type="image/png" href="icons/route-icon-192.png"><!--/PWA-->
 <title>Route Knijperwagen</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* Route knijperwagen in dezelfde stijl als Locatie delen: AW-kopband, kaarten met schaduw, pilknoppen, Avenir Next.
+/* Route knijperwagen in dezelfde stijl als Locatie delen: kopband, kaarten met schaduw, pilknoppen, Avenir Next.
    Opbouw: stops als accordeon (één stop open), bericht rechts (sticky). Smal scherm: tabs Stops/Bericht, actiebalk onderaan. */
 :root {
   --bg: #EEF3F8; --surface: #FFFFFF; --field: #FFFFFF; --ink: #0E2236; --ink-2: #566879; --line: #D0DAE5;
@@ -217,6 +217,7 @@ textarea.inp { resize: none; overflow: hidden; line-height: 1.35; display: block
 .h-sub { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h-acts { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .h-acts .btn { min-height: 38px; font-size: 0.875rem; }
+a.lnk { color: var(--accent); font-weight: 600; }
 dialog { border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem; width: min(26rem, calc(100vw - 32px)); background: var(--surface); color: var(--ink); box-shadow: 0 12px 40px rgba(0, 31, 56, 0.3); }
 dialog[open] { display: grid; gap: 0.7rem; animation: rise 0.2s ease both; }
 dialog::backdrop { background: var(--scrim); }
@@ -325,6 +326,7 @@ dialog h2 { margin: 0; font-size: 1.0625rem; font-weight: 600; text-transform: n
     <p class="hint">Een back-up bevat je eerdere routes en de suggesties voor plaatsen en items.</p>
   </div>
   <p id="ver" class="hint"></p>
+  <p class="hint">Meer tools: <a class="lnk" href="https://arwinvdh.github.io/locatie/" target="_blank" rel="noopener">Locatie delen</a></p>
   <button id="settingsOk" class="btn primary" type="button">Klaar</button>
 </dialog>
 
@@ -485,7 +487,7 @@ function check(stops) {
         pasteMsg = $('paste-msg'), sheet = $('sheet'), histList = $('hist-list'),
         syncNote = $('sync-note'), histOpen = $('hist-open'), tabN = $('tab-n');
   const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const VERSION = '2026.10.22-a';
+  const VERSION = '2026.10.22-b';
 
   /* meldingen en vangnet: een fout wordt zichtbaar in plaats van stil te falen */
   let toastT = null, lastErr = '';

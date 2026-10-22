@@ -10,8 +10,8 @@
 <meta name="apple-mobile-web-app-title" content="Locatie">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png">
-<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 :root {
@@ -55,6 +55,7 @@ details > summary::-webkit-details-marker { display: none; }
 details[open] > .more-sum::after { transform: rotate(180deg); }
 .more-in { display: grid; gap: .6rem; padding-top: .4rem; animation: rise .25s ease both; }
 @media (max-width: 40rem) { #q { flex: 1 1 100%; } #paste, #go, #me { flex: 1; } }
+a.lnk { color: var(--accent); font-weight: 600; }
 dialog { border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem; width: min(24rem, calc(100vw - 32px)); background: var(--surface); color: var(--ink); box-shadow: 0 12px 40px rgba(0,31,56,.3); }
 dialog[open] { display: grid; gap: .7rem; animation: rise .2s ease both; }
 dialog::backdrop { background: rgba(0,31,56,.5); }
@@ -250,6 +251,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
     <div class="field"><label for="myPhone">Telefoon</label><input class="inp" id="myPhone" type="tel" autocomplete="tel"></div>
     <p class="hint">Eenmalig invullen. Blijft alleen op dit apparaat staan.</p>
     <p class="hint" id="ver"></p>
+    <p class="hint">Meer tools: <a class="lnk" href="route.html">Route knijperwagen</a></p>
     <button class="btn primary" id="settingsOk">Klaar</button>
   </dialog>
 </section>
@@ -261,7 +263,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var VERSION = '2026.10.22-c';
+  var VERSION = '2026.10.22-d';
   if (typeof L === 'undefined') {
     var wn = document.createElement('div'); wn.className = 'tip'; wn.style.margin = '1rem'; wn.textContent = 'De kaartbibliotheek is niet geladen. Controleer je verbinding en ververs de pagina.';
     document.body.insertBefore(wn, document.body.firstChild); return;
@@ -699,7 +701,7 @@ textarea.inp { resize: vertical; min-height: 64px; }
       });
     });
   }
-  // noordpijl in dezelfde stijl als het kaartje: witte rand met schaduw, afronding 18, lichte kaartkleur, AW-blauw
+  // noordpijl in dezelfde stijl als het kaartje: witte rand met schaduw, afronding 18, lichte kaartkleur, huisstijlblauw
   function drawNorth(g, x0, y0, S) {
     var rad = 18, cx = x0 + S / 2;
     g.save(); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 14; g.shadowOffsetY = 4; g.fillStyle = '#fff'; rrect(g, x0 - 5, y0 - 5, S + 10, S + 10, rad + 4); g.fill(); g.restore();
